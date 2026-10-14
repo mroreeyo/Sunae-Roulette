@@ -38,8 +38,11 @@ export interface ImportStats {
 
 export interface TransformResult {
   records: PlaceRecord[];
-  /** 관리번호 of closed businesses in the district, used to deactivate existing rows. */
-  closedSourceIds: string[];
+  /**
+   * 관리번호 of rows in the district that must not stay active: closed businesses and
+   * open ones now excluded by the category or name rules.
+   */
+  deactivateSourceIds: string[];
   stats: ImportStats;
 }
 
@@ -76,7 +79,7 @@ export function transformRows(table: string[][], options: ImportOptions): Transf
     unknownBusinessTypes: {},
   };
   const records: PlaceRecord[] = [];
-  const closedSourceIds: string[] = [];
+  const deactivateSourceIds: string[] = [];
 
   for (const row of rows) {
     if (row.length === 1 && row[0] === '') continue; // trailing blank line
@@ -92,7 +95,7 @@ export function transformRows(table: string[][], options: ImportOptions): Transf
     const status = get(row, '영업상태명');
     if (status === CLOSED_STATUS) {
       stats.closed += 1;
-      closedSourceIds.push(get(row, '관리번호'));
+      deactivateSourceIds.push(get(row, '관리번호'));
       continue;
     }
     if (status !== OPEN_STATUS) {
@@ -115,6 +118,7 @@ export function transformRows(table: string[][], options: ImportOptions): Transf
     }
     if (category === null) {
       stats.excluded += 1;
+      deactivateSourceIds.push(get(row, '관리번호'));
       continue;
     }
 
@@ -137,5 +141,5 @@ export function transformRows(table: string[][], options: ImportOptions): Transf
     });
   }
 
-  return { records, closedSourceIds, stats };
+  return { records, deactivateSourceIds, stats };
 }

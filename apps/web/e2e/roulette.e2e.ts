@@ -16,7 +16,7 @@ test('spin, accept, and see the meal in history', async ({ page }) => {
   await expect(page.getByRole('link', { name: '네이버 지도' })).toHaveAttribute('href', /map\.naver\.com\/p\/search\//);
 
   await page.getByRole('link', { name: '기록' }).click();
-  await expect(page.getByRole('listitem').filter({ hasText: pickedName })).toBeVisible();
+  await expect(page.getByRole('list', { name: '식사 목록' }).getByRole('listitem').filter({ hasText: pickedName })).toBeVisible();
 });
 
 test('rerolling never shows the skipped place again', async ({ page }) => {

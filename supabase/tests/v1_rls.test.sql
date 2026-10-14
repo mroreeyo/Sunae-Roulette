@@ -61,10 +61,11 @@ select is_empty(
   $$ update public.places set name = '남의것' where source = 'manual' returning id $$,
   'B cannot edit A''s manual place'
 );
+-- Count only this test's rows so the result does not depend on imported data.
 select is(
-  (select count(*)::int from public.places),
+  (select count(*)::int from public.places where source_id = 'pub-1' or name = '직접추가집'),
   2,
-  'B can read every place'
+  'B can read every place, including another user''s manual place'
 );
 
 -- Anonymous (not signed in) --------------------------------------------------

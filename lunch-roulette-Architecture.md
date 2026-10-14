@@ -45,11 +45,12 @@ lunch-roulette/
 │     ├─ features/
 │     │  ├─ backdrop/        # SunaeBackdrop (three.js 잔상 배경, React.lazy로 별도 파일)
 │     │  ├─ data/            # queries.ts (TanStack Query 훅: 세션·설정·식당·기록 조회와 저장)
-│     │  ├─ roulette/        # RouletteWheel, ResultCard
-│     │  ├─ places/          # PlaceList, PlaceForm, usePlaces
-│     │  ├─ history/         # MealList, CategoryBars, useMeals
+│     │  ├─ roulette/        # RouletteWheel, ResultCard, FilterBar
+│     │  ├─ places/          # AddPlaceForm, vocabulary.ts(카테고리·태그 어휘)
+│     │  ├─ ui/              # Chip (공용 토글 칩)
 │     │  └─ room/            # CandidateCard, VoteBar, useRoomRealtime (v2)
-│     ├─ stores/             # filterStore, rouletteSessionStore (Zustand)
+│     ├─ pages/History.tsx   # 기록 목록 + 30일 통계(core mealStats)
+│     ├─ stores/             # filterStore(localStorage에 기억), rouletteSessionStore (Zustand)
 │     ├─ lib/                # supabase.ts, queryClient.ts(영속화 설정), mapLinks.ts(카카오·네이버 링크)
 │     └─ App.tsx
 ├─ packages/core/            # recommend.ts, cooldown.ts(영업일), weights.ts, geo.ts(거리·도보 시간) + 테스트

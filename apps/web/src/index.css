@@ -60,3 +60,11 @@ body {
   background: var(--bg);
   color: var(--ink);
 }
+
+/* Horizontal chip rows still scroll by touch; only the bar is hidden. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

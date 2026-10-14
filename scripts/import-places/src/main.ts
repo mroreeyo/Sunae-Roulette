@@ -29,20 +29,21 @@ async function main() {
   };
 
   const records = new Map<string, PlaceRecord>();
-  const closed = new Set<string>();
+  const deactivate = new Set<string>();
   for (const file of files) {
-    const { records: fileRecords, closedSourceIds, stats } = transformRows(
+    const { records: fileRecords, deactivateSourceIds, stats } = transformRows(
       parseCsv(decodeCp949(readFileSync(file))),
       options,
     );
     fileRecords.forEach((r) => records.set(r.source_id, r));
-    closedSourceIds.forEach((id) => closed.add(id));
+    deactivateSourceIds.forEach((id) => deactivate.add(id));
     console.log(basename(file), stats);
   }
 
   const { data, error } = await db.rpc('import_places', {
     p_records: [...records.values()],
-    p_closed_ids: [...closed],
+    // The DB parameter is named for closed rows; it deactivates any listed public row.
+    p_closed_ids: [...deactivate],
     p_file_name: files.map((f) => basename(f)).join(', '),
   });
   if (error) throw error;

@@ -10,4 +10,6 @@ export {
 } from './weights.ts';
 export type { WeightContext } from './weights.ts';
 export { buildWheel, recommend } from './recommend.ts';
+export { mealStats } from './stats.ts';
+export type { CategoryShare, MealStats, PlaceCount } from './stats.ts';
 export type { Candidate, RecommendInput, RecommendResult } from './recommend.ts';

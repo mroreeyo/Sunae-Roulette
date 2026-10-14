@@ -35,6 +35,16 @@ describe('toCategory', () => {
     expect(toCategory('기타', '포케올데이 서현역점')).toBe('기타');
   });
 
+  it('excludes PC rooms, poker pubs and bars that hold a restaurant licence', () => {
+    expect(toCategory('기타', '레벨업 pc방 수내점')).toBeNull();
+    expect(toCategory('기타', '피씨테그(PC-TAG 수내역점)')).toBeNull();
+    expect(toCategory('기타', 'ABC 홀덤펍')).toBeNull();
+    expect(toCategory('기타', '야화혼술바 분당수내점')).toBeNull();
+    expect(toCategory('기타', '백스비어 분당수내점')).toBeNull();
+    expect(toCategory('기타', '신전떡볶이 수내점')).toBe('기타');
+    expect(toCategory('기타', '샐러디수내점')).toBe('기타');
+  });
+
   it('falls back to 기타 for unknown business types', () => {
     expect(toCategory('새로운업태', '식당')).toBe('기타');
     expect(isKnownBusinessType('새로운업태')).toBe(false);
@@ -73,10 +83,11 @@ describe('transformRows', () => {
       row('new-1', '신규업태집', '새로운업태', '영업/정상', NEAR, ''),
       [''],
     ];
-    const { records, closedSourceIds, stats } = transformRows(table, OPTIONS);
+    const { records, deactivateSourceIds, stats } = transformRows(table, OPTIONS);
 
     expect(records.map((r) => r.source_id)).toEqual(['ok-1', 'new-1']);
-    expect(closedSourceIds).toEqual(['closed-1']);
+    // Closed rows and rows excluded by the rules are both sent for deactivation.
+    expect(deactivateSourceIds).toEqual(['closed-1', 'cafe-1']);
     expect(stats).toMatchObject({
       rowsRead: 7,
       outsideDistrict: 1,

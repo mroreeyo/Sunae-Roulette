@@ -176,6 +176,75 @@ export function useSaveMeal() {
   });
 }
 
+/** Fields a user can change on their own copy of a place. */
+export type PrefPatch = Partial<Pick<PlacePref, 'isFavorite' | 'isHidden' | 'tags'>>;
+
+export function emptyPref(placeId: string): PlacePref {
+  return { placeId, isFavorite: false, isHidden: false, tags: [] };
+}
+
+export function useSetPref() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ placeId, patch }: { placeId: string; patch: PrefPatch }) => {
+      const current = client.getQueryData<PlacePref[]>(queryKeys.prefs)?.find((p) => p.placeId === placeId);
+      const next = { ...(current ?? emptyPref(placeId)), ...patch };
+      const { error } = await supabase.from('user_place_prefs').upsert(
+        { place_id: placeId, is_favorite: next.isFavorite, is_hidden: next.isHidden, tags: next.tags },
+        { onConflict: 'user_id,place_id' },
+      );
+      if (error) throw error;
+    },
+    // Toggles feel instant; the cache is rolled back if the write fails.
+    onMutate: async ({ placeId, patch }) => {
+      await client.cancelQueries({ queryKey: queryKeys.prefs });
+      const previous = client.getQueryData<PlacePref[]>(queryKeys.prefs) ?? [];
+      const exists = previous.some((p) => p.placeId === placeId);
+      const next = exists
+        ? previous.map((p) => (p.placeId === placeId ? { ...p, ...patch } : p))
+        : [...previous, { ...emptyPref(placeId), ...patch }];
+      client.setQueryData(queryKeys.prefs, next);
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      if (context) client.setQueryData(queryKeys.prefs, context.previous);
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.prefs }),
+  });
+}
+
+export interface NewPlaceInput {
+  name: string;
+  category: string;
+  address: string | null;
+}
+
+export function useAddPlace() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, category, address }: NewPlaceInput) => {
+      const { error } = await supabase.from('places').insert({ source: 'manual', name, category, address });
+      if (error) throw error;
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.places }),
+  });
+}
+
+export function useSetCooldown() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (cooldownDays: number) => {
+      const userId = await ensureSession();
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: userId, cooldown_days: cooldownDays }, { onConflict: 'id' });
+      if (error) throw error;
+    },
+    onMutate: (cooldownDays) => client.setQueryData(queryKeys.profile, cooldownDays),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.profile }),
+  });
+}
+
 export function useDeleteMeal() {
   const client = useQueryClient();
   return useMutation({

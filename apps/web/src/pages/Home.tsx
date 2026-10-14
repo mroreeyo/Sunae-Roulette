@@ -12,8 +12,10 @@ import {
   useSession,
   type PlaceRow,
 } from '../features/data/queries.ts';
+import { FilterBar } from '../features/roulette/FilterBar.tsx';
 import { ResultCard } from '../features/roulette/ResultCard.tsx';
 import { RouletteWheel, rotationFor } from '../features/roulette/RouletteWheel.tsx';
+import { hasActiveFilters, toCoreFilters, useFilters } from '../stores/filterStore.ts';
 import { useRouletteSession } from '../stores/rouletteSessionStore.ts';
 
 // three.js lives in its own chunk so the first screen stays within the bundle budget.
@@ -51,6 +53,8 @@ export default function Home() {
   const saveMeal = useSaveMeal();
   const { skippedIds, spinCount, firstSpinAt, recordSpin, skip, clearSkipped, reset } = useRouletteSession();
 
+  const filters = useFilters();
+  const filtersActive = hasActiveFilters(filters);
   const reduceMotion = useReducedMotion() ?? false;
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'idle' });
   const rotation = useRef(0);
@@ -70,6 +74,7 @@ export default function Home() {
       places: places.data,
       meals: meals.data,
       prefs: prefs.data,
+      filters: toCoreFilters(filters),
       sessionExcludedIds: excluded,
       today,
       cooldownDays: cooldown.data,
@@ -125,12 +130,12 @@ export default function Home() {
 
   return (
     <div className="relative isolate flex flex-col gap-6 pb-4">
-      <div className="pointer-events-none absolute -inset-x-4 -top-4 -z-10 h-[460px] overflow-hidden">
+      <div className="pointer-events-none absolute -inset-x-4 -top-4 -z-10 h-[680px] overflow-hidden">
         <Suspense fallback={null}>
           <SunaeBackdrop src={BACKDROP_SRC} mode={backdropMode} reduceMotion={reduceMotion} />
         </Suspense>
-        {/* Dense behind the heading for legible text, thin behind the wheel so the photo shows. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-bg/90 from-10% via-bg/20 via-45% to-bg to-100%" />
+        {/* Dense behind the heading, medium behind the chips, thin behind the wheel, then fade out. */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,var(--bg)_4%,color-mix(in_oklab,var(--bg)_70%,transparent)_22%,color-mix(in_oklab,var(--bg)_60%,transparent)_38%,color-mix(in_oklab,var(--bg)_15%,transparent)_55%,color-mix(in_oklab,var(--bg)_25%,transparent)_80%,var(--bg)_100%)]" />
       </div>
 
       <header className="pt-2">
@@ -146,6 +151,8 @@ export default function Home() {
           오늘은 {todaysMeal.name}에서 먹었어요. 다시 고르면 기록이 바뀌어요.
         </p>
       )}
+
+      <FilterBar disabled={spinning} />
 
       {loadError ? (
         <div role="alert" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
@@ -201,11 +208,29 @@ export default function Home() {
       {outcome.kind === 'no-match' && (
         <div className="rounded-3xl bg-surface p-5 ring-1 ring-line">
           <p className="font-semibold">조건에 맞는 곳이 없어요.</p>
-          <p className="mt-1 text-[14px] text-ink-muted">숨긴 식당을 다시 보이게 하거나 쿨다운을 줄여 보세요.</p>
+          {filtersActive ? (
+            <button
+              type="button"
+              className={`${primaryButton} mt-4`}
+              onClick={() => {
+                filters.clear();
+                setOutcome({ kind: 'idle' });
+              }}
+            >
+              필터 해제
+            </button>
+          ) : (
+            <p className="mt-1 text-[14px] text-ink-muted">숨긴 식당을 다시 보이게 하거나 쿨다운을 줄여 보세요.</p>
+          )}
         </div>
       )}
 
-      {ready && places.data.length > 0 && (outcome.kind === 'idle' || (outcome.kind === 'result' && outcome.saved) || outcome.kind === 'spinning') && (
+      {ready &&
+        places.data.length > 0 &&
+        (outcome.kind === 'idle' ||
+          outcome.kind === 'spinning' ||
+          (outcome.kind === 'result' && outcome.saved) ||
+          outcome.kind === 'no-match') && (
         <button type="button" className={primaryButton} onClick={() => spin(skippedIds)} disabled={spinning}>
           {spinning ? '돌리는 중' : outcome.kind === 'result' ? '한 번 더 돌리기' : '돌리기'}
         </button>
