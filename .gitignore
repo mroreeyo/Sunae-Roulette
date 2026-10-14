@@ -20,6 +20,13 @@ supabase/.env
 test-results/
 playwright-report/
 
+# downloaded public data files (large, re-downloadable)
+data/raw/
+
+# agent tooling state
+.omc/
+.omx/
+
 # editors / OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,21 @@
+{
+  "name": "lunch-roulette",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @lunch/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "import:places": "pnpm --filter @lunch/import-places run import:places"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^17.0.0",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
