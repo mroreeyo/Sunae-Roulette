@@ -7,6 +7,8 @@ interface ResultCardProps {
   candidate: Candidate & { place: PlaceRow };
   saved: boolean;
   saving: boolean;
+  /** The save is queued until the device is back online. */
+  waitingForNetwork: boolean;
   saveError: string | null;
   onAccept: () => void;
   onReroll: () => void;
@@ -15,7 +17,7 @@ interface ResultCardProps {
 const buttonBase =
   'inline-flex min-h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
-export function ResultCard({ candidate, saved, saving, saveError, onAccept, onReroll }: ResultCardProps) {
+export function ResultCard({ candidate, saved, saving, waitingForNetwork, saveError, onAccept, onReroll }: ResultCardProps) {
   const reduceMotion = useReducedMotion();
   const { place, walkMinutes } = candidate;
 
@@ -59,12 +61,17 @@ export function ResultCard({ candidate, saved, saving, saveError, onAccept, onRe
               onClick={onAccept}
               disabled={saving}
             >
-              {saving ? '기록하는 중' : '여기 갈래'}
+              {waitingForNetwork ? '연결 기다리는 중' : saving ? '기록하는 중' : '여기 갈래'}
             </button>
             <button type="button" className={`${buttonBase} bg-surface-2 text-ink`} onClick={onReroll} disabled={saving}>
               다시 돌리기
             </button>
           </div>
+        )}
+        {waitingForNetwork && (
+          <p role="status" className="mt-3 text-[14px] text-ink-muted">
+            지금은 오프라인이에요. 연결되면 바로 기록할게요.
+          </p>
         )}
         {saveError && (
           <p role="alert" className="mt-3 text-[14px] text-accent-ink">

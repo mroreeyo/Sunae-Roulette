@@ -5,6 +5,9 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
   timeout: 30_000,
+  // One local Supabase and one Vite dev server serve every test; more workers just queue on them.
+  workers: 2,
+  expect: { timeout: 10_000 },
   use: {
     baseURL: 'http://localhost:5173',
     ...devices['Pixel 7'],

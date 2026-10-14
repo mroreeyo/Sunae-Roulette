@@ -234,10 +234,10 @@ export function useSetCooldown() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (cooldownDays: number) => {
-      const userId = await ensureSession();
+      const user = await ensureSession();
       const { error } = await supabase
         .from('profiles')
-        .upsert({ id: userId, cooldown_days: cooldownDays }, { onConflict: 'id' });
+        .upsert({ id: user.id, cooldown_days: cooldownDays }, { onConflict: 'id' });
       if (error) throw error;
     },
     onMutate: (cooldownDays) => client.setQueryData(queryKeys.profile, cooldownDays),

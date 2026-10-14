@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "import:places": "node --env-file-if-exists=.env src/main.ts",
+    "import:places:cloud": "node --env-file=.env.cloud src/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

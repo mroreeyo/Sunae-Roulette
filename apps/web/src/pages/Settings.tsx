@@ -1,3 +1,4 @@
+import { AccountSection } from '../features/account/AccountSection.tsx';
 import { DEFAULT_COOLDOWN_DAYS, useAppConfig, useCooldownDays, useSetCooldown } from '../features/data/queries.ts';
 
 const MIN_COOLDOWN = 3;
@@ -55,6 +56,8 @@ export default function Settings() {
           </p>
         )}
       </section>
+
+      <AccountSection />
 
       <section aria-labelledby="base-title" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
         <h2 id="base-title" className="text-[17px] font-bold">

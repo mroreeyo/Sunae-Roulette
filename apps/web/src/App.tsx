@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router';
+import { useAuthSync } from './features/account/useAuthSync.ts';
 import History from './pages/History.tsx';
 import Home from './pages/Home.tsx';
 import Places from './pages/Places.tsx';
@@ -12,6 +13,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export default function App() {
+  useAuthSync();
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col">
       <main className="flex-1 px-4 pt-4">

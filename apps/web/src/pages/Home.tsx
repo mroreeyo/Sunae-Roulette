@@ -63,7 +63,10 @@ export default function Home() {
   const today = toSeoulDate(new Date());
   const todaysMeal = meals.data?.find((m) => m.eatenOn === today);
   const ready = config.isSuccess && places.isSuccess && prefs.isSuccess && meals.isSuccess && cooldown.isSuccess;
-  const loadError = session.error ?? config.error ?? places.error ?? prefs.error ?? meals.error ?? cooldown.error;
+  // With cached data the roulette still works, so errors only matter when nothing is loaded.
+  const loadError = ready
+    ? null
+    : (session.error ?? config.error ?? places.error ?? prefs.error ?? meals.error ?? cooldown.error);
 
   const idleLabels = useMemo(() => (places.data ?? []).slice(0, 8).map((p) => p.name), [places.data]);
 
@@ -190,6 +193,7 @@ export default function Home() {
           candidate={pick}
           saved={outcome.saved}
           saving={saveMeal.isPending}
+          waitingForNetwork={saveMeal.isPaused}
           saveError={saveMeal.error?.message ?? null}
           onAccept={accept}
           onReroll={reroll}
