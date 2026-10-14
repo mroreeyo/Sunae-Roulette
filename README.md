@@ -97,7 +97,9 @@ v1에는 Edge Function과 예약 작업이 없습니다. 클라우드 Supabase �
 ### 2. Vercel
 
 1. GitHub 저장소를 Vercel에 가져오고 Root Directory를 `apps/web`으로 지정합니다. pnpm 워크스페이스는 Vercel이 저장소 루트에서 설치합니다.
-2. 환경 변수 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`에 클라우드 프로젝트의 URL과 publishable(anon) 키를 넣습니다.
+2. 환경 변수를 넣습니다.
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`: 클라우드 프로젝트의 URL과 publishable(anon) 키
+   - `ENABLE_EXPERIMENTAL_COREPACK=1`: 루트 `package.json`의 `packageManager`에 적힌 pnpm 버전으로 설치하게 합니다
 3. 배포합니다. `apps/web/vercel.json`이 모든 경로를 `index.html`로 보내므로 `/history` 같은 주소로 바로 들어와도 열립니다.
 
 ### 배포 후 확인
