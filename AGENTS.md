@@ -45,7 +45,8 @@
 
 ## 4. 보안 규칙
 
-- 카카오 REST 키와 Supabase service role 키는 Edge Function 환경 변수나 Supabase Vault에만 둔다. 프론트 코드, `.env.example`, 테스트 Fixture, 로그에 넣지 않는다.
+- Supabase service role 키는 Edge Function 환경 변수(v2)와 가져오기 스크립트를 실행하는 PC의 git 제외 `.env`에만 둔다. 프론트 코드, `.env.example`, 테스트 Fixture, 로그에 넣지 않는다.
+- 식당 데이터는 공공데이터에서만 저장한다. 카카오·네이버 등 지도 API의 응답은 DB나 브라우저 저장소에 저장하지 않는다(약관상 저장 금지). 지도 서비스는 일반 URL 링크로만 연결한다.
 - 프론트 번들에는 Supabase URL과 anon 키만 들어간다.
 - 모든 테이블에 RLS를 켜고, TRD의 RLS 정책표대로 구현한다. 정책 없이 테이블을 추가하지 않는다.
 - 본인을 가리키는 컬럼(`user_id`, `created_by`, `voter_id`)은 기본값을 `auth.uid()`로 두고, 클라이언트가 값을 보내지 않게 한다.
@@ -53,15 +54,16 @@
 
 ## 5. 검증
 
-저장소를 구성한 뒤 다음 명령을 기준으로 검증한다. 실제 스크립트 이름이 정해지면 이 절을 갱신한다.
+변경 후 루트에서 다음 명령으로 검증한다.
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:e2e
 pnpm build
 ```
+
+- `pnpm test:e2e`(Playwright)는 화면 흐름을 구현하는 단계에서 추가한다. 추가 전까지는 위 네 명령이 기준이다.
 
 - RLS와 SQL 함수는 `supabase start`로 띄운 로컬 DB에서 SQL 테스트로 검증한다.
 - 실행하지 않은 테스트를 통과했다고 보고하지 않는다.

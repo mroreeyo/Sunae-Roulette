@@ -14,54 +14,88 @@
 | 룰렛 애니메이션 | CSS transform + Framer Motion | 휠 회전과 결과 카드 등장 |
 | 통계 차트 | 라이브러리 없이 CSS 막대 | 카테고리 비율 막대 정도라 충분하고, 번들 200KB 제한을 지킨다 |
 | DB / 인증 | Supabase Postgres + Auth | 익명 로그인으로 시작해 나중에 계정 연결 가능 |
+| 식당 데이터 | 공공데이터포털 일반음식점·휴게음식점 인허가 CSV + 가져오기 스크립트(Node) | 저장·가공이 허용된 데이터라 DB에 둘 수 있고, API 키와 쿼터가 필요 없다 |
+| 좌표 변환 | proj4 (가져오기 스크립트 전용 개발 의존성) | 원본 좌표계(EPSG:5174)를 위경도로 바꾼다. 앱 번들에는 포함되지 않는다 |
+| 지도 연결 | 카카오맵·네이버 지도 URL 링크 | API 호출이 아니라 일반 링크라 키·쿼터·저장 제한이 없다 |
 | 실시간 (v2) | Supabase Realtime (Postgres Changes) | 투표·방 상태 변경을 구독해 득표 바와 확정 결과 갱신 |
-| 서버 함수 | Supabase Edge Functions (Deno) | 카카오 API 키를 숨기는 프록시, 동기화, 방 생성 |
-| 예약 작업 | pg\_cron (+ pg\_net) | 주 1회 식당 재동기화(pg\_net으로 함수 호출), 1분마다 마감된 방 확정(SQL 함수) |
+| 서버 함수 (v2) | Supabase Edge Functions (Deno) | 방 생성(여러 사용자 기록을 합쳐 후보 계산) |
+| 예약 작업 (v2) | pg\_cron | 1분마다 마감된 방 확정(SQL 함수) |
 | 배포 | Vercel (프론트) | GitHub 푸시로 자동 배포, 프리뷰 URL |
 | 테스트 | Vitest + Testing Library, Playwright | 추천 로직 단위 테스트, 룰렛·투표 E2E |
 
 **주의할 제약.** [Supabase 무료 플랜](https://supabase.com/pricing)은 1주일 동안 활동이 없으면 프로젝트가 일시정지된다. 매일 쓰는 앱이라 대체로 문제없지만, 휴가 기간 후에는 대시보드에서 다시 켜야 할 수 있다.
 
-## 외부 API: 카카오 로컬
+## 식당 데이터: 공공데이터
 
-식당 목록은 [카카오 로컬 API](https://developers.kakao.com/docs/ko/local/dev-guide)의 "카테고리로 장소 검색"으로 가져온다. 핵심 제약은 **한 번의 검색으로 최대 45곳까지만 받을 수 있다**는 점이다 (size 최대 15 × 노출 가능 문서 최대 45). 수내역 주변 음식점은 이보다 훨씬 많으므로 영역을 잘게 나눠 여러 번 조회한다.
+**지도 API를 쓰지 않는 이유 (2026-10-14 확인).**
 
-**약관 확인 (확인 필요).** 응답을 자체 DB에 저장하고 주 1회 재동기화하는 방식이 카카오 개발자 약관에 맞는지 구현 착수 전에 확인한다. 허용되지 않으면 수집 방식을 다시 설계한다.
+- 카카오맵 API FAQ는 "로컬 API 등을 호출하여 응답받은 결과 데이터를 별도로 저장하여 사용하는 것은 허용하지 않습니다"라고 안내한다(실시간 호출만 허용, 20분 임시 저장도 불가).
+- 네이버 지역 검색은 검색 한 번에 결과가 5건 수준이라 반경 안의 식당을 모두 모을 수 없다. 2026-09-07 개정 특약에서 저장·캐싱도 금지 행위에 포함된 것으로 보도되었다(원문 미확인).
+- 그래서 식당 목록은 저장과 가공이 허용된 공공데이터로 만들고, 지도 서비스는 링크로만 연결한다.
 
-**사용할 엔드포인트**
+**데이터셋**
 
-| 용도 | 엔드포인트 | 주요 파라미터 |
+| 데이터 | 제공 | 형식·좌표계 | 이용 조건 |
+| --- | --- | --- | --- |
+| [행정안전부\_식품\_일반음식점](https://www.data.go.kr/data/15045016/fileData.do) | 공공데이터포털 (행정안전부) | CSV, EPSG:5174 | 이용허락범위 제한 없음 |
+| 행정안전부\_식품\_휴게음식점 | 공공데이터포털 (행정안전부) | 위와 같음 | 확인 필요 |
+
+휴게음식점은 버거·토스트·김밥처럼 점심으로 자주 가는 업소가 있어서 함께 가져온다. 단, 커피숍·편의점·아이스크림 등은 제외한다.
+
+**실제 파일로 확인한 사항 (2026-10-14, 성남시 파일).**
+
+- 공공데이터포털에서 로그인 후 **시군구 단위 파일**을 받을 수 있다(`식품_일반음식점_경기성남시.csv` 9.5MB, `식품_휴게음식점_경기성남시.csv` 3.6MB). 기존 LOCALDATA 파일 주소는 403을 반환한다(2026년 4월 이관).
+- 인코딩은 **CP949**이고, 두 파일 모두 같은 39개 컬럼이다. 사용 컬럼: 관리번호, 사업장명, 업태구분명, 영업상태명(`영업/정상`·`폐업`), 도로명주소, 지번주소, 전화번호, 좌표정보(X)·(Y).
+- 분당구에서 영업 중인 업소는 일반음식점 4,483곳, 휴게음식점 1,556곳이다. 이 가운데 좌표가 없는 곳은 64곳이다.
+- **업태만으로는 카페를 거를 수 없다.** 일반음식점의 "기타"와 휴게음식점의 "패스트푸드"·"기타 휴게음식점"에 커피 전문점이 섞여 있다. 그래서 상호명에 커피·카페·디저트 관련 단어나 주요 카페 브랜드가 들어 있으면 제외한다.
+- 좌표 변환 정의는 EPSG:5174 + 표준 Bessel→WGS84 데이텀 변환(`towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43`)을 쓴다. 상호에 수내·정자·서현역이 들어간 113곳을 변환해 보니 역까지 거리의 중앙값이 170\~240m였다. 데이텀 변환을 빼면 390\~490m, EPSG:2097로 계산하면 250\~430m로 더 멀어졌다.
+- 갱신을 자동화할 수 있는 OpenAPI가 있는지는 아직 확인하지 않았다 (확인 필요).
+
+**가져오기 스크립트 (`scripts/import-places`)**
+
+개발자 PC에서 내려받은 CSV를 넣어 실행한다. 원본은 "수시 갱신"이므로 v1에서는 월 1회 수동으로 실행한다.
+
+```bash
+pnpm import:places "$PWD/data/raw/식품_일반음식점_경기성남시.csv" "$PWD/data/raw/식품_휴게음식점_경기성남시.csv"
+```
+
+1. CSV를 CP949로 읽는다. 필요한 컬럼이 없으면 바로 중단한다.
+2. 주소에 "성남시 분당구"가 들어 있는 행만 남긴다. 폐업 행은 관리번호만 모아 두고, 영업 중이 아니거나 좌표가 비어 있는 행은 건너뛰고 건수를 기록한다.
+3. 업태 매핑표와 상호명 규칙으로 앱 카테고리를 정하고, 제외 대상은 버린다. 매핑표에 없는 업태는 "기타"로 넣고 건수를 출력한다.
+4. 좌표를 WGS84 위경도로 변환하고, `app_config`의 기준 좌표에서 반경(기본 500m) 밖인 행을 버린다.
+5. DB 함수 `import_places(records, closed_ids, file_name)`를 한 번 호출한다. 이 함수는 한 트랜잭션 안에서 다음을 처리한다.
+   - 관리번호(`source_id`)로 upsert하고, `last_seen_at`을 갱신하며 `miss_count`를 0으로 되돌린다.
+   - 폐업으로 나온 공공데이터 행은 바로 비활성화한다.
+   - 이번 가져오기에 없는 공공데이터 행은 `miss_count`를 1 올리고, 2가 되면 비활성화한다. 직접 추가한 식당은 이 판정에서 제외한다.
+   - 결과를 `import_logs`에 남긴다.
+
+스크립트는 service role 키로 DB에 쓴다. 키는 `scripts/import-places/.env`(git 제외)에 둔다. `import_places`는 `anon`과 `authenticated`에서 실행 권한을 회수한다.
+
+**업태 → 앱 카테고리 매핑 (2026-10 성남시 파일의 실제 값 기준)**
+
+| 앱 카테고리 | 업태구분명 |
+| --- | --- |
+| 한식 | 한식, 식육(숯불구이), 탕류(보신용), 냉면집 |
+| 중식 | 중국식 |
+| 일식 | 일식, 횟집, 복어취급 |
+| 양식 | 경양식, 패밀리레스트랑 (원본 표기 그대로) |
+| 분식 | 분식, 김밥(도시락) |
+| 아시안 | 외국음식전문점(인도,태국등) |
+| 패스트푸드 | 통닭(치킨), 패스트푸드 |
+| 뷔페 | 뷔페식 |
+| 기타 | 기타, 일반조리판매, 기타 휴게음식점, 매핑표에 없는 값 |
+| (제외) | 호프/통닭, 정종/대포집/소주방, 감성주점, 라이브카페, 까페, 키즈카페, 출장조리, 이동조리, 커피숍, 편의점, 아이스크림, 떡카페, 과자점, 전통찻집, 다방, 백화점, 철도역구내, 푸드트럭 |
+
+업태와 상관없이 상호명에 커피·카페·cafe·coffee·에스프레소·디저트·베이커리·제과·젤라또·아이스크림·빙수가 들어가거나, 주요 카페 브랜드(스타벅스, 투썸, 이디야, 빽다방, 컴포즈, 메가엠지씨, 할리스, 폴바셋, 공차, 배스킨라빈스)이면 제외한다. 규칙은 `scripts/import-places/src/categories.ts`에 있다.
+
+**지도 링크.** 결과 카드에 링크 두 개를 둔다. 둘 다 API가 아닌 일반 URL이다. URL 형식은 구현할 때 실제로 열어서 확인한다 (확인 필요).
+
+| 링크 | 위치가 있을 때 | 위치가 없을 때 (직접 추가) |
 | --- | --- | --- |
-| 기준 좌표 찾기 (최초 1회) | `GET /v2/local/search/keyword.json` | `query=수내역`, `category_group_code=SW8` |
-| 식당 수집 | `GET /v2/local/search/category.json` | `category_group_code=FD6`, `rect`, `page`, `size=15` (노출 한도 45건이라 실질 3페이지) |
-| 식당 직접 추가 검색 | `GET /v2/local/search/keyword.json` | `query`, `category_group_code=FD6`, 기준 좌표 `x`·`y` |
+| 카카오맵 | 길찾기 `https://map.kakao.com/link/to/{이름},{위도},{경도}` | 검색 `https://map.kakao.com/link/search/{이름 주소}` |
+| 네이버 지도 | 검색 `https://map.naver.com/p/search/{이름 주소}` | 같음 |
 
-카페(CE7)는 v1에서 수집하지 않는다.
-
-인증은 `Authorization: KakaoAK ${REST_API_KEY}` 헤더다. REST 키는 브라우저에 노출하지 않고 Edge Function 환경 변수에만 둔다.
-
-**수집 알고리즘 (사분할 타일링)**
-
-1. `app_config`의 기준 좌표를 중심으로 반경(기본 500m)을 덮는 사각형을 만든다. 호출자가 좌표를 넘길 수 없고, 항상 `app_config` 값을 쓴다.
-2. 사각형을 `rect` 파라미터로 조회한다. 응답의 `meta.total_count`가 45를 넘으면 그 사각형을 4등분해 각각 다시 조회한다.
-3. `total_count`가 45 이하가 될 때까지 반복하고, `is_end`가 true가 될 때까지 페이지를 넘긴다. 단, 분할 깊이가 6에 이르거나 타일 한 변이 30m보다 작아지면 더 나누지 않고, 받을 수 있는 45건만 저장한 뒤 `sync_logs`에 경고를 남긴다 (한 건물에 식당이 몰린 경우).
-4. 결과를 장소 `id`로 중복 제거하고, 기준 좌표에서 반경 밖인 곳과 카테고리가 "술집"인 곳은 버린다.
-5. `kakao_id`로 upsert하며 `last_seen_at`을 갱신하고 `miss_count`를 0으로 되돌린다. 이미 `source='manual'`로 직접 추가된 행이 수집되면 `source`를 `kakao`로 바꾼다.
-6. 이번 수집에 없는 기존 식당은 바로 지우지 않는다. `source='kakao'`이고 반경 안에 있는 행만 `miss_count`를 1 올리고, 2가 되면 `is_active=false`로 바꾼다. 직접 추가한 식당은 이 판정에서 제외한다.
-
-**응답 필드 매핑**
-
-| 카카오 필드 | 저장 컬럼 | 비고 |
-| --- | --- | --- |
-| `id` | `places.kakao_id` | 고유 키, 중복 제거 기준 |
-| `place_name` | `places.name` |  |
-| `category_name` | `places.category_path`, `places.category` | "음식점 > 한식 > 국밥"에서 두 번째 단계(한식)를 대분류로 저장. 두 번째 단계가 "술집"이면 저장하지 않음 |
-| `x`, `y` | `places.lng`, `places.lat` | 문자열 → 숫자 변환 |
-| `road_address_name` | `places.address` |  |
-| `place_url` | `places.kakao_url` | 결과 카드의 "카카오맵에서 보기" 링크 |
-| `phone` | `places.phone` |  |
-
-**도보 시간.** 직선거리 × 1.3(경로 보정) ÷ 분당 67m(시속 4km)로 근사한다. 반경 500m 끝은 약 10분, 필터 "도보 5분"은 직선 약 250m에 해당한다. 거리는 브라우저에서 `app_config` 기준 좌표와 식당 좌표로 계산한다(`lib/geo.ts`). 정확한 도보 경로는 v1에서 다루지 않는다.
+**도보 시간.** 직선거리 × 1.3(경로 보정) ÷ 분당 67m(시속 4km)로 근사한다. 반경 500m 끝은 약 10분, 필터 "도보 5분"은 직선 약 250m에 해당한다. 거리는 `app_config` 기준 좌표와 식당 좌표로 계산하며, 계산 함수는 브라우저·Edge Function·가져오기 스크립트가 함께 쓰도록 `packages/core/src/geo.ts`에 둔다. 위치가 없는 식당은 도보 시간을 "알 수 없음"으로 표시하고, 거리 필터를 켜면 후보에서 뺀다. 정확한 도보 경로는 v1에서 다루지 않는다.
 
 ## 데이터 모델
 
@@ -71,10 +105,10 @@
 | --- | --- | --- | --- |
 | `app_config` | 전역 설정 (1행) | `id`(=1), `base_name`, `base_lat`, `base_lng`, `radius_m` | v1 |
 | `profiles` | 사용자 설정 | `id`(= auth uid), `nickname`, `cooldown_days`(3\~10, 영업일) | v1 |
-| `places` | 식당 마스터 | `id`, `kakao_id`(unique), `name`, `category`, `category_path`, `lat`, `lng`, `address`, `kakao_url`, `phone`, `source`(kakao/manual), `created_by`, `is_active`, `last_seen_at`, `miss_count` | v1 |
+| `places` | 식당 마스터 | `id`, `source`(public/manual), `source_id`(관리번호, unique), `name`, `category`, `category_raw`, `lat`, `lng`, `address`, `phone`, `created_by`, `is_active`, `last_seen_at`, `miss_count` | v1 |
 | `user_place_prefs` | 개인별 식당 설정 | `user_id`(기본값 `auth.uid()`), `place_id`, `is_favorite`, `is_hidden`, `tags`(혼밥, 가격대 등) — (`user_id`, `place_id`)가 PK | v1 |
 | `meals` | 식사 기록 | `id`, `user_id`, `place_id`, `eaten_on`, `room_id`(nullable), `spin_count`, `decision_seconds` | v1 |
-| `sync_logs` | 동기화 결과 | `id`, `started_at`, `finished_at`, `status`, `added`, `updated`, `deactivated`, `message` | v1 |
+| `import_logs` | 가져오기 결과 | `id`, `file_name`, `started_at`, `finished_at`, `rows_read`, `added`, `updated`, `deactivated`, `skipped`, `message` | v1 |
 | `rooms` | 점심 방 | `id`, `code`(8자리 unique), `host_id`, `deadline_at`, `status`(open/closed), `winner_place_id` | v2 |
 | `room_members` | 방 입장자 | `room_id`, `user_id`, `nickname`, `joined_at` — (`room_id`, `user_id`)가 PK | v2 |
 | `room_candidates` | 방의 후보 식당 | `id`, `room_id`, `place_id`, `added_by`, `position`, `weight`(생성 시점 가중치) | v2 |
@@ -91,20 +125,20 @@ create table app_config (
 
 create table places (
   id uuid primary key default gen_random_uuid(),
-  kakao_id text unique,
+  source text not null check (source in ('public','manual')),
+  source_id text unique,           -- 공공데이터 관리번호, 직접 추가는 null
   name text not null,
-  category text not null,          -- 한식, 일식, 중식 ...
-  category_path text,
-  lat double precision not null,
-  lng double precision not null,
+  category text not null,          -- 앱 카테고리: 한식, 중식, 일식 ...
+  category_raw text,               -- 원본 업태구분명
+  lat double precision,            -- 직접 추가는 위치 없이 등록할 수 있다
+  lng double precision,
   address text,
-  kakao_url text,
   phone text,
-  source text not null default 'kakao' check (source in ('kakao','manual')),
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
   is_active boolean not null default true,
   last_seen_at timestamptz,
-  miss_count integer not null default 0
+  miss_count integer not null default 0,
+  check (source = 'manual' or (source_id is not null and lat is not null and lng is not null))
 );
 
 create table meals (
@@ -120,7 +154,7 @@ create table meals (
 );
 ```
 
-`user_id`, `created_by`, `voter_id`처럼 본인을 가리키는 컬럼은 기본값을 `auth.uid()`로 둔다. 클라이언트는 이 값을 보내지 않고, upsert의 충돌 판정에도 기본값이 그대로 쓰인다.
+`user_id`, `created_by`, `voter_id`처럼 본인을 가리키는 컬럼은 기본값을 `auth.uid()`로 둔다. 클라이언트는 이 값을 보내지 않고, upsert의 충돌 판정에도 기본값이 그대로 쓰인다. 가져오기 스크립트는 service role로 쓰므로 `created_by`가 null이 된다.
 
 **v2 테이블**
 
@@ -173,7 +207,7 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 
 ## API 명세와 서버 함수
 
-단순 조회·저장은 Supabase 클라이언트로 테이블에 직접 접근하고(권한은 RLS가 막는다), 비밀 키나 여러 사용자 데이터를 합쳐야 하는 작업은 Edge Function이나 `security definer` DB 함수로 만든다.
+단순 조회·저장은 Supabase 클라이언트로 테이블에 직접 접근하고(권한은 RLS가 막는다), 여러 사용자 데이터를 합쳐야 하는 작업은 Edge Function이나 `security definer` DB 함수로 만든다. v1에는 Edge Function이 없다.
 
 **추천 로직의 위치.** v1 추천은 브라우저에서 돈다. 후보가 수백 곳 수준이라 전부 받아와 계산해도 충분히 빠르다. 로직은 순수 함수 `recommend(places, meals, prefs, filters, rng)`로 `packages/core`에 두고, v2의 `create-room` 함수가 같은 코드를 가져다 쓴다. 난수 함수를 인자로 받아서 테스트에서 결과를 고정할 수 있다.
 
@@ -185,21 +219,19 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 | --- | --- | --- |
 | 전역 설정 | `from('app_config').select().single()` | 기준 좌표·반경, 거리 계산과 설정 화면 표시용 |
 | 식당 목록 | `from('places').select().eq('is_active', true)` | 앱 시작 시 1회, 캐시 1시간 |
-| 식당 직접 추가 | `from('places').upsert({ kakao_id, ..., source: 'manual' }, { onConflict: 'kakao_id', ignoreDuplicates: true })` 후 `kakao_id`로 다시 조회 | 이미 있는 식당이면 새로 만들지 않고 기존 행을 쓴다 |
+| 식당 직접 추가 | `from('places').insert({ source: 'manual', name, category, address? })` | 이름·카테고리 필수, 주소 선택. 위치는 비워 둔다 |
 | 개인 설정 | `from('user_place_prefs').select()` / `.upsert()` | 즐겨찾기·숨기기·태그 |
-| 최근 기록 | `from('meals').select().gte('eaten_on', 30일 전)` | 쿨다운·통계 계산용 |
+| 최근 기록 | `from('meals').select('place_id, eaten_on, places(category)').gte('eaten_on', 30일 전)` | 쿨다운·통계 계산용. 비활성화된 식당의 기록도 카테고리 감점에 반영되도록 카테고리를 함께 받는다 |
 | 식사 저장 | `from('meals').upsert({ place_id, eaten_on, spin_count, decision_seconds }, { onConflict: 'user_id,eaten_on' })` | 같은 날 다시 저장하면 교체 |
 | 방 입장 (v2) | `rpc('join_room', { code, nickname })` | 방·후보·입장자 반환. 코드로 방을 찾는 유일한 경로 |
 | 투표 (v2) | `from('votes').upsert({ room_id, candidate_id }, { onConflict: 'room_id,voter_id' })` | 마감 전만 허용 (RLS) |
 | 실시간 구독 (v2) | `channel('room:{id}')`에 `postgres_changes`를 `votes`·`room_members`(`room_id=eq.{id}`), `rooms`(`id=eq.{id}`)로 등록 | 득표 재집계, 입장자 목록, 확정 결과 표시 |
 
-**Edge Functions**
+**Edge Functions (v2)**
 
 | 함수 | 메서드 | 입력 → 출력 | 호출 주체 |
 | --- | --- | --- | --- |
-| `sync-places` | POST | 입력 없음(`app_config` 기준) → 추가·갱신·비활성 건수 | pg\_cron이 pg\_net으로 호출 (매주 월 06:00). 수동 실행은 개발자가 service role 키로 직접 호출. 함수는 service role 요청만 받는다 |
-| `search-place` | GET | 검색어 → 카카오 키워드 검색 결과 상위 15건 (술집 제외) | 식당 직접 추가 화면 (로그인 사용자) |
-| `create-room` (v2) | POST | `{ preview: true, exclude_place_ids? }` → 후보 3곳 미리보기 / `{ place_ids, deadline_at? }` → `{ code, candidates }` | 진행자 |
+| `create-room` | POST | `{ preview: true, exclude_place_ids? }` → 후보 3곳 미리보기 / `{ place_ids, deadline_at? }` → `{ code, candidates }` | 진행자 |
 
 `create-room`은 저장할 때 진행자를 `room_members`에 넣고, 후보마다 생성 시점의 `weight`를 기록한다. `deadline_at`을 생략하면 11:40으로 정하고, 11:30이 지났으면 현재 시각 + 10분으로 정한다. 후보 계산의 쿨다운은 진행자의 기록과 최근 30일 안에 진행자의 방에서 투표한 사람들의 기록을 합쳐서 쓴다.
 
@@ -222,7 +254,7 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 
 pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 있다. 화면은 카운트다운이 0이 되면 "집계 중"을 보여주고 `rooms` 변경을 기다린다.
 
-**오류 처리.** 카카오 API가 429나 5xx를 주면 지수 백오프로 3회 재시도하고, 실패하면 기존 식당 목록을 그대로 유지한다(`miss_count`도 올리지 않는다). 동기화 결과는 `sync_logs` 테이블에 남긴다.
+**오류 처리.** 가져오기 스크립트는 한 번의 실행을 하나의 트랜잭션으로 처리한다. 중간에 실패하면 기존 식당 목록을 그대로 유지하고(`miss_count`도 올리지 않는다), 실패 내용을 `import_logs`에 남긴다.
 
 ## 보안·권한, 비기능 요구사항, 테스트
 
@@ -233,15 +265,17 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 | 테이블 | 읽기 | 쓰기 |
 | --- | --- | --- |
 | `app_config` | 로그인한 누구나 | service role만 |
-| `places` | 로그인한 누구나 | 추가: `source='manual'`이고 `created_by = auth.uid()`일 때. 수정·삭제: 본인이 추가한 `manual` 행만. 나머지는 service role만 |
+| `places` | 로그인한 누구나 | 추가: `source='manual'`이고 `created_by = auth.uid()`일 때. 수정: 본인이 추가한 `manual` 행만. 삭제는 기록이 참조할 수 있어 `is_active=false`로 처리한다. `public` 행은 service role(가져오기 스크립트)만 |
 | `user_place_prefs`, `meals`, `profiles` | 본인 행만 (`user_id = auth.uid()`) | 본인 행만. upsert를 쓰므로 insert와 update 정책을 모두 둔다 |
-| `sync_logs` | 없음 (대시보드에서 확인) | service role만 |
+| `import_logs` | 없음 (대시보드에서 확인) | service role만 |
 | `rooms`, `room_candidates`, `room_members` | `is_room_member(room_id)`가 참일 때 | 직접 쓰기 금지. `create-room`, `join_room`, `propose_candidate`로만 |
 | `votes` | `is_room_member(room_id)`가 참일 때 | 본인 `voter_id`이고, `rooms.status='open'`이며 `deadline_at > now()`일 때만 (insert·update) |
 
 방 코드 일치 여부는 RLS가 확인할 수 없다. 그래서 `rooms`를 코드로 직접 조회하지 못하게 막고, `join_room`으로 입장한 사람만 방을 읽게 한다. Realtime의 Postgres Changes도 이 읽기 정책을 따르므로 입장자에게만 변경이 전달된다. `votes`, `rooms`, `room_members`는 `supabase_realtime` publication에 추가한다.
 
-**비밀 관리.** 카카오 REST 키와 Supabase service role 키는 Edge Function 환경 변수에만 둔다. pg\_cron이 `sync-places`를 호출할 때 쓰는 키는 Supabase Vault에 저장한다. 프론트 번들에는 Supabase URL과 anon 키만 들어간다.
+**비밀 관리.** Supabase service role 키는 Edge Function 환경 변수(v2)와 가져오기 스크립트를 실행하는 PC의 git 제외 `.env`에만 둔다. 프론트 번들에는 Supabase URL과 anon 키만 들어간다. 지도 링크와 공공데이터 파일에는 비밀 키가 필요 없다.
+
+**출처 표시.** 식당 목록 화면 하단에 "식당 정보: 행정안전부 공공데이터"를 표시한다. 이용허락범위에 제한이 없더라도 데이터의 출처와 기준일을 사용자가 알 수 있게 한다.
 
 **비기능 요구사항**
 
@@ -258,12 +292,16 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 
 | 대상 | 방법 | 대표 케이스 |
 | --- | --- | --- |
-| `recommend()` | Vitest 단위 테스트, 고정 난수 | 쿨다운 안 식당 제외(영업일 계산, 월요일 포함), 직전 식사 카테고리 ×0.3, 카테고리 감점 중복 미적용, 후보 0곳일 때 쿨다운 완화, 세션 소진 시 결과 구분, 가중치 분포가 1만 회 시뮬레이션에서 기대 확률 ±1%p |
-| 타일링 수집 | Vitest + 카카오 응답 목(mock) | `total_count` 46일 때 4분할, 중복 id 제거, 분할 깊이 한도에서 중단, 술집 제외, `miss_count` 2회 시 비활성, manual 행 비활성 제외 |
-| RLS | Supabase 로컬(`supabase start`) + SQL 테스트 | 남의 `meals` 조회 불가, 입장 없이 `rooms` 조회 불가, 다른 방 후보 투표 거부, 마감 후 투표 거부, 남이 추가한 식당 수정 불가 |
+| `recommend()` | Vitest 단위 테스트, 고정 난수 | 쿨다운 안 식당 제외(영업일 계산, 월요일 포함), 직전 식사 카테고리 ×0.3, 카테고리 감점 중복 미적용, 후보 0곳일 때 쿨다운 완화, 세션 소진 시 결과 구분, 위치 없는 식당의 거리 필터 처리, 가중치 분포가 1만 회 시뮬레이션에서 기대 확률 ±1.5%p (p=0.5 기준 약 3σ) |
+| 좌표 변환 | Vitest | 실제 파일의 수내역 인근 업소 좌표가 검증된 위경도로 변환됨 (회귀 고정) |
+| 가져오기 변환 | Vitest + CSV 픽스처 | 분당구·영업 중 행만 통과, 폐업 관리번호 수집, 좌표 없는 행 건너뜀, 반경 밖 제외, 업태 매핑·제외 업태·상호명 카페 제외, 필수 컬럼 누락 시 중단 |
+| RLS·가져오기 함수 | Supabase 로컬 + pgTAP(`supabase test db`) | 남의 `meals` 조회 불가, 하루 1회 기록, 사용자가 `public` 행 추가·수정 불가, 남이 추가한 식당 수정 불가, 비로그인 조회 불가, 사용자가 `import_places` 실행 불가, 누락 2회 시 비활성, 폐업 즉시 비활성. v2: 입장 없이 `rooms` 조회 불가, 다른 방 후보 투표 거부, 마감 후 투표 거부 |
 | 방 확정 | SQL 테스트 | 동점 시 weight 우선, 0표 방 처리, 기존 개인 기록 유지 |
 | 화면 흐름 | Playwright | 돌리기 → 여기 갈래 → 기록 화면에 표시, 두 브라우저 동시 투표와 확정 결과 표시 |
 
 ## 변경 이력
 
 - 2026-10-14: 문서 검토 결과 반영. `app_config`로 기준 위치 전역화, 동기화 범위·비활성 판정(`miss_count`)·타일링 깊이 한도·술집 제외, `created_by`와 `auth.uid()` 기본값, `sync_logs`·지표 컬럼 추가, v2 `room_members`·`join_room` 기반 권한 모델, 복합 FK, `close-room` 함수를 SQL 함수 `close_due_rooms()`로 대체, Realtime 구독 대상 보강, 오프라인 영속화, 테스트 기준 보강.
+- 2026-10-14: `packages/core` 구현에 맞춰 수정. 거리 계산을 `packages/core/src/geo.ts`로 이동, 최근 기록 조회에 카테고리 포함, 분포 테스트 허용 오차를 ±1.5%p로 조정(±1%p는 약 2σ라 우연한 실패 가능).
+- 2026-10-14: 식당 데이터 출처를 카카오 로컬 API에서 공공데이터(일반음식점·휴게음식점 인허가)로 변경. 카카오는 응답 저장을 금지하고, 네이버 지역 검색은 전체 수집이 불가능하기 때문이다. `sync-places`·`search-place` Edge Function, 카카오 키, pg\_net·Vault를 제거하고 가져오기 스크립트와 `import_logs`로 대체했다. `places`를 `source`(public/manual)·`source_id` 구조로 바꾸고, 직접 추가 식당은 위치 없이 등록할 수 있게 했다. 지도는 카카오맵·네이버 지도 링크로만 연결한다.
+- 2026-10-14: 성남시 실제 파일로 확정. CP949·39개 컬럼 확인, 업태 매핑을 실제 값으로 수정(횟집, 패밀리레스트랑, 휴게음식점 업태 추가), 상호명 기반 카페 제외 규칙 추가, 좌표 변환 정의를 실측으로 검증, 갱신 처리를 DB 함수 `import_places`로 일원화, 식당 삭제를 비활성화로 처리.
