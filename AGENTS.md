@@ -37,7 +37,7 @@
 ## 3. 설계 원칙
 
 - **스택은 TRD를 따른다.** React 18 + Vite + TypeScript, React Router, TanStack Query, Zustand, Tailwind CSS, Framer Motion, Supabase(Postgres·Auth·Realtime·Edge Functions·pg\_cron), Vercel, Vitest·Playwright. TRD에 없는 의존성은 사용자 승인 없이 추가하지 않는다.
-- **번들 제한.** 프론트 JS 번들은 gzip 200KB 이하로 유지한다. 차트 라이브러리를 쓰지 않는다.
+- **번들 제한.** 첫 화면 JS 번들은 gzip 200KB 이하로 유지한다. 차트 라이브러리를 쓰지 않는다. three.js는 `React.lazy`로 불러오는 배경 컴포넌트(`features/backdrop`) 안에서만 import한다. 다른 곳에서 import하면 첫 화면 번들에 섞인다.
 - **추천 로직.** `recommend()`와 쿨다운·가중치 계산은 `packages/core`의 순수 함수로 둔다. 난수는 인자로 주입한다. 외부 패키지에 의존하지 않고, 상대 import에 `.ts` 확장자를 붙여 Deno(Edge Function)에서도 쓸 수 있게 한다.
 - **날짜.** 모든 날짜는 `Asia/Seoul` 기준이다. 쿨다운과 가중치의 기간은 영업일(월\~금) 단위이며, 공휴일은 v1에서 고려하지 않는다.
 - **기준 위치.** 사용자별로 두지 않고 `app_config` 한 행으로 관리한다.
@@ -61,9 +61,11 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:e2e
 ```
 
-- `pnpm test:e2e`(Playwright)는 화면 흐름을 구현하는 단계에서 추가한다. 추가 전까지는 위 네 명령이 기준이다.
+- `pnpm test:e2e`(Playwright)는 로컬 Supabase(`supabase start`)가 떠 있고 식당 데이터를 가져온 상태에서 실행한다.
+- 빌드 결과의 JS 크기(gzip)를 확인해 200KB 예산 안인지 본다. 애니메이션은 `LazyMotion` + `m.*` 컴포넌트로만 쓴다(`motion.*`는 번들을 키운다).
 
 - RLS와 SQL 함수는 `supabase start`로 띄운 로컬 DB에서 SQL 테스트로 검증한다.
 - 실행하지 않은 테스트를 통과했다고 보고하지 않는다.

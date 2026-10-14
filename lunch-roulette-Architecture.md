@@ -43,7 +43,9 @@ lunch-roulette/
 │  └─ src/
 │     ├─ pages/              # Home, Places, History, Settings, RoomNew, RoomVote
 │     ├─ features/
-│     │  ├─ roulette/        # RouletteWheel, ResultCard, useRoulette
+│     │  ├─ backdrop/        # SunaeBackdrop (three.js 잔상 배경, React.lazy로 별도 파일)
+│     │  ├─ data/            # queries.ts (TanStack Query 훅: 세션·설정·식당·기록 조회와 저장)
+│     │  ├─ roulette/        # RouletteWheel, ResultCard
 │     │  ├─ places/          # PlaceList, PlaceForm, usePlaces
 │     │  ├─ history/         # MealList, CategoryBars, useMeals
 │     │  └─ room/            # CandidateCard, VoteBar, useRoomRealtime (v2)

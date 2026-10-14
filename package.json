@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @lunch/web test:e2e",
     "import:places": "pnpm --filter @lunch/import-places run import:places"
   },
   "devDependencies": {

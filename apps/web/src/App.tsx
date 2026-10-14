@@ -13,8 +13,8 @@ const NAV_ITEMS = [
 
 export default function App() {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-      <main className="flex-1 p-4">
+    <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col">
+      <main className="flex-1 px-4 pt-4">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/places" element={<Places />} />
@@ -22,14 +22,19 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
-      <nav className="sticky bottom-0 grid grid-cols-4 border-t bg-white">
+      <nav
+        aria-label="주요 화면"
+        className="sticky bottom-0 grid grid-cols-4 border-t border-line bg-bg/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
+      >
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end
             className={({ isActive }) =>
-              `flex min-h-11 items-center justify-center text-sm ${isActive ? 'font-semibold' : ''}`
+              `flex min-h-14 items-center justify-center text-[15px] transition-colors duration-200 ease-soft ${
+                isActive ? 'font-bold text-accent-ink' : 'text-ink-muted'
+              }`
             }
           >
             {item.label}
