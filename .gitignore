@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+coverage/
+
+# env files (secrets stay out of git)
+.env
+.env.*
+!.env.example
+
+# supabase local state
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# playwright
+test-results/
+playwright-report/
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.log
