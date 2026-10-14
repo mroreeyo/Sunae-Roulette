@@ -1,0 +1,20 @@
+{
+  "name": "@lunch/import-places",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import:places": "node --env-file-if-exists=.env src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lunch/core": "workspace:*",
+    "@supabase/supabase-js": "^2.0.0",
+    "proj4": "^2.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
