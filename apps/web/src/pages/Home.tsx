@@ -12,6 +12,7 @@ import {
   useSession,
   type PlaceRow,
 } from '../features/data/queries.ts';
+import { FailedSaveNotices } from '../features/roulette/FailedSaveNotices.tsx';
 import { FilterBar } from '../features/roulette/FilterBar.tsx';
 import { ResultCard } from '../features/roulette/ResultCard.tsx';
 import { RouletteWheel, rotationFor } from '../features/roulette/RouletteWheel.tsx';
@@ -149,6 +150,8 @@ export default function Home() {
           {places.data ? ` · ${places.data.length}곳` : ''}
         </p>
       </header>
+
+      <FailedSaveNotices />
 
       {todaysMeal && outcome.kind !== 'result' && (
         <p className="rounded-full bg-accent-soft px-4 py-2.5 text-[14px] font-medium text-accent-ink">

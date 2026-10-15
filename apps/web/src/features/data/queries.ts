@@ -1,5 +1,15 @@
 import { addDays, toSeoulDate, type LatLng, type Meal, type Place, type PlacePref } from '@lunch/core';
-import { mutationOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  matchMutation,
+  mutationOptions,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+  type Mutation,
+  type MutationFilters,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { ensureSession, supabase } from '../../lib/supabase.ts';
 
 /** Cooldown used until the user changes it in settings (PRD default). */
@@ -159,12 +169,43 @@ export interface SaveMealInput {
   decisionSeconds: number;
 }
 
+const saveMealKey = ['saveMeal'] as const;
+
+/**
+ * Set on every mutation restored from the persisted cache (see `lib/queryClient.ts`). No screen
+ * watches a restored save, so the home screen reports the ones that fail.
+ */
+export const restoredMutationMeta = { restored: true } as const;
+
+const failedRestoredSaveFilters = {
+  mutationKey: saveMealKey,
+  status: 'error',
+  predicate: (mutation) => mutation.meta?.restored === true,
+} satisfies MutationFilters;
+
+/** A save queued offline that ran after the app was opened again and failed. */
+export function isFailedRestoredSave(mutation: Mutation): boolean {
+  return matchMutation(failedRestoredSaveFilters, mutation);
+}
+
+function removeFailedRestoredSaves(client: QueryClient, eatenOn: string): void {
+  const cache = client.getMutationCache();
+  for (const failed of cache.findAll(failedRestoredSaveFilters)) {
+    if ((failed.state.variables as SaveMealInput | undefined)?.eatenOn === eatenOn) cache.remove(failed);
+  }
+}
+
+/** postgrest-js reports a request that got no response (offline, DNS, timeout) with an empty code. */
+function isNetworkFailure(error: unknown): boolean {
+  return !(error as { code?: string } | null)?.code;
+}
+
 /**
  * Also the client's mutation defaults for this key (see `lib/queryClient.ts`), so a save
  * persisted while paused offline can still run after the app is closed and opened again.
  */
 export const saveMealOptions = mutationOptions({
-  mutationKey: ['saveMeal'] as const,
+  mutationKey: saveMealKey,
   mutationFn: async ({ placeId, eatenOn, spinCount, decisionSeconds }: SaveMealInput) => {
     const { error } = await supabase.from('meals').upsert(
       {
@@ -177,11 +218,46 @@ export const saveMealOptions = mutationOptions({
     );
     if (error) throw error;
   },
-  onSuccess: (_data, _input, _result, { client }) => client.invalidateQueries({ queryKey: queryKeys.meals }),
+  // The upsert is safe to repeat, so a request that got no response is sent again. If the
+  // device goes offline in between, the retry waits for the connection instead of failing.
+  retry: (failureCount, error) => failureCount < 2 && isNetworkFailure(error),
+  retryDelay: (failureCount) => (failureCount + 1) * 1000,
+  onSuccess: (_data, input, _result, { client }) => {
+    // The day is recorded now, so a failed restored save for that day no longer needs a notice.
+    removeFailedRestoredSaves(client, input.eatenOn);
+    return client.invalidateQueries({ queryKey: queryKeys.meals });
+  },
 });
 
 export function useSaveMeal() {
   return useMutation(saveMealOptions);
+}
+
+export interface FailedSave {
+  input: SaveMealInput;
+  message: string;
+}
+
+/**
+ * Restored saves that failed, one per day: a later save for a day replaces an earlier one, so
+ * the latest is kept. Each stays until it is retried, superseded or dismissed.
+ */
+export function useFailedRestoredSaves(): FailedSave[] {
+  const failures = useMutationState({
+    filters: failedRestoredSaveFilters,
+    select: (mutation) => ({
+      input: mutation.state.variables as SaveMealInput,
+      // An error restored from storage is a plain object and may have lost its message.
+      message: mutation.state.error?.message ?? '',
+    }),
+  });
+  return [...new Map(failures.map((f) => [f.input.eatenOn, f])).values()];
+}
+
+/** Drops the failed restored saves for a day, leaving that day unrecorded. */
+export function useDismissFailedSave() {
+  const client = useQueryClient();
+  return (eatenOn: string) => removeFailedRestoredSaves(client, eatenOn);
 }
 
 /** Fields a user can change on their own copy of a place. */

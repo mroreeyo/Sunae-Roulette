@@ -4,7 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import App from './App.tsx';
-import { persistOptions, queryClient } from './lib/queryClient.ts';
+import { persistOptions, queryClient, resumeRestoredMutations } from './lib/queryClient.ts';
 import './index.css';
 
 const root = document.getElementById('root');
@@ -15,8 +15,8 @@ createRoot(root).render(
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={persistOptions}
-      // A meal saved while offline is sent once the connection is back.
-      onSuccess={() => queryClient.resumePausedMutations()}
+      // A meal saved while offline and then closed is sent when the app opens again online.
+      onSuccess={resumeRestoredMutations}
     >
       {/* Only the DOM animation features are bundled; use `m.*` components, not `motion.*`. */}
       <LazyMotion features={domAnimation} strict>

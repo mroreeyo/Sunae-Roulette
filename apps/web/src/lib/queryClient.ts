@@ -1,11 +1,12 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import { QueryClient } from '@tanstack/react-query';
-import type {
-  PersistedClient,
-  Persister,
-  PersistQueryClientProviderProps,
+import { defaultShouldDehydrateMutation, QueryClient } from '@tanstack/react-query';
+import {
+  persistQueryClientSave,
+  type PersistedClient,
+  type Persister,
+  type PersistQueryClientProviderProps,
 } from '@tanstack/react-query-persist-client';
-import { queryKeys, saveMealOptions } from '../features/data/queries.ts';
+import { isFailedRestoredSave, queryKeys, restoredMutationMeta, saveMealOptions } from '../features/data/queries.ts';
 
 /** Cached places and meals are good enough for a lunch pick for a day. */
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -81,8 +82,27 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
   persister,
   maxAge: CACHE_MAX_AGE_MS,
   buster: CACHE_BUSTER,
+  hydrateOptions: {
+    defaultOptions: {
+      // No screen watches a restored mutation. The mark lets the home screen report a restored
+      // save that fails, and the endless gcTime keeps that failure until the user acts on it.
+      mutations: { meta: restoredMutationMeta, gcTime: Infinity },
+    },
+  },
   dehydrateOptions: {
     // The session is re-checked on every start, so it is never restored from the cache.
     shouldDehydrateQuery: (query) => query.state.status === 'success' && query.queryKey[0] !== queryKeys.session[0],
+    // Paused mutations, plus failed restored saves so their notice survives a reload.
+    shouldDehydrateMutation: (mutation) => defaultShouldDehydrateMutation(mutation) || isFailedRestoredSave(mutation),
   },
 };
+
+/**
+ * Sends the saves restored from the cache, e.g. a meal accepted offline before the tab was closed.
+ * The provider only starts writing cache changes once this settles, so the outcome is written here.
+ * Otherwise a save that failed would stay queued in storage and be sent again on the next start.
+ */
+export async function resumeRestoredMutations(): Promise<void> {
+  await queryClient.resumePausedMutations();
+  await persistQueryClientSave({ queryClient, ...persistOptions });
+}
