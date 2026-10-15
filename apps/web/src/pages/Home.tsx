@@ -114,6 +114,7 @@ export default function Home() {
     saveMeal.mutate(
       {
         placeId: pick.place.id,
+        eatenOn: toSeoulDate(new Date()),
         spinCount: Math.max(spinCount, 1),
         decisionSeconds: firstSpinAt ? Math.round((Date.now() - firstSpinAt) / 1000) : 0,
       },

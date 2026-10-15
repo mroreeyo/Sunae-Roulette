@@ -1,5 +1,5 @@
 import { addDays, toSeoulDate, type LatLng, type Meal, type Place, type PlacePref } from '@lunch/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { mutationOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ensureSession, supabase } from '../../lib/supabase.ts';
 
 /** Cooldown used until the user changes it in settings (PRD default). */
@@ -153,27 +153,35 @@ export function useRecentMeals() {
 
 export interface SaveMealInput {
   placeId: string;
+  /** Seoul date of the tap, so a save queued offline keeps that day even if it runs later. */
+  eatenOn: string;
   spinCount: number;
   decisionSeconds: number;
 }
 
+/**
+ * Also the client's mutation defaults for this key (see `lib/queryClient.ts`), so a save
+ * persisted while paused offline can still run after the app is closed and opened again.
+ */
+export const saveMealOptions = mutationOptions({
+  mutationKey: ['saveMeal'] as const,
+  mutationFn: async ({ placeId, eatenOn, spinCount, decisionSeconds }: SaveMealInput) => {
+    const { error } = await supabase.from('meals').upsert(
+      {
+        place_id: placeId,
+        eaten_on: eatenOn,
+        spin_count: spinCount,
+        decision_seconds: decisionSeconds,
+      },
+      { onConflict: 'user_id,eaten_on' },
+    );
+    if (error) throw error;
+  },
+  onSuccess: (_data, _input, _result, { client }) => client.invalidateQueries({ queryKey: queryKeys.meals }),
+});
+
 export function useSaveMeal() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ placeId, spinCount, decisionSeconds }: SaveMealInput) => {
-      const { error } = await supabase.from('meals').upsert(
-        {
-          place_id: placeId,
-          eaten_on: toSeoulDate(new Date()),
-          spin_count: spinCount,
-          decision_seconds: decisionSeconds,
-        },
-        { onConflict: 'user_id,eaten_on' },
-      );
-      if (error) throw error;
-    },
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meals }),
-  });
+  return useMutation(saveMealOptions);
 }
 
 /** Fields a user can change on their own copy of a place. */
