@@ -1,6 +1,10 @@
 import { mealStats, toSeoulDate } from '@lunch/core';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useDeleteMeal, useRecentMeals } from '../features/data/queries.ts';
+import { MealPlaceEditor } from '../features/history/MealPlaceEditor.tsx';
+
+const rowButton =
+  'min-h-11 shrink-0 rounded-full px-3 text-[14px] text-ink-muted transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -14,12 +18,18 @@ export default function History() {
   const meals = useRecentMeals();
   const deleteMeal = useDeleteMeal();
   const stats = useMemo(() => (meals.data ? mealStats(meals.data, toSeoulDate(new Date())) : null), [meals.data]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
 
   return (
     <div className="flex flex-col gap-5 pb-4">
       <header className="pt-2">
         <h1 className="text-[26px] leading-tight font-bold tracking-tight">식사 기록</h1>
         <p className="mt-1 text-[15px] text-ink-muted">최근 45일</p>
+        {/* Always rendered so screen readers pick up each new notice. */}
+        <p role="status" className="text-[14px] font-semibold text-accent-ink not-empty:mt-2">
+          {notice}
+        </p>
       </header>
 
       {meals.isPending ? (
@@ -68,28 +78,58 @@ export default function History() {
           </section>
         )}
         <ul className="flex flex-col gap-2" aria-label="식사 목록">
-          {meals.data.map((meal) => (
-            <li key={meal.id} className="flex min-h-[72px] items-center gap-3 rounded-3xl bg-surface px-5 py-3 ring-1 ring-line">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] text-ink-muted">{formatDate(meal.eatenOn)}</p>
-                <p className="truncate text-[16px] font-semibold">{meal.name}</p>
-              </div>
-              <span className="rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent-ink">
-                {meal.category}
-              </span>
-              <button
-                type="button"
-                className="min-h-11 rounded-full px-3 text-[14px] text-ink-muted transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-50"
-                aria-label={`${formatDate(meal.eatenOn)} ${meal.name} 기록 삭제`}
-                disabled={deleteMeal.isPending}
-                onClick={() => {
-                  if (window.confirm(`${meal.name} 기록을 지울까요?`)) deleteMeal.mutate(meal.id);
-                }}
-              >
-                삭제
-              </button>
-            </li>
-          ))}
+          {meals.data.map((meal) => {
+            const date = formatDate(meal.eatenOn);
+            const editing = editingId === meal.id;
+            return (
+              <li key={meal.id} className="rounded-3xl bg-surface px-5 py-3 ring-1 ring-line">
+                <div className="flex min-h-12 items-center gap-1">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-[13px] text-ink-muted">
+                      {date}
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-semibold text-accent-ink">
+                        {meal.category}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 truncate text-[16px] font-semibold">{meal.name}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={rowButton}
+                    aria-label={`${date} ${meal.name} 기록 수정${editing ? ' 닫기' : ''}`}
+                    aria-expanded={editing}
+                    onClick={() => {
+                      setNotice('');
+                      setEditingId(editing ? null : meal.id);
+                    }}
+                  >
+                    {editing ? '닫기' : '수정'}
+                  </button>
+                  <button
+                    type="button"
+                    className={rowButton}
+                    aria-label={`${date} ${meal.name} 기록 삭제`}
+                    disabled={deleteMeal.isPending}
+                    onClick={() => {
+                      if (!window.confirm(`${meal.name} 기록을 지울까요?`)) return;
+                      deleteMeal.mutate(meal.id, { onSuccess: () => setNotice(`${date} 기록을 지웠어요.`) });
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+                {editing && (
+                  <MealPlaceEditor
+                    meal={meal}
+                    onChanged={() => {
+                      setEditingId(null);
+                      setNotice(`${date} 기록을 바꿨어요.`);
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
         </>
       )}

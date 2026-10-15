@@ -1,17 +1,20 @@
 import { distanceMeters, walkMinutes } from '@lunch/core';
 import { useDeferredValue, useId, useMemo, useState } from 'react';
-import { emptyPref, useAppConfig, usePlaces, usePrefs, useSetPref } from '../features/data/queries.ts';
-import { AddPlaceForm } from '../features/places/AddPlaceForm.tsx';
+import { emptyPref, useAppConfig, usePlaces, usePrefs, useSession, useSetPref } from '../features/data/queries.ts';
+import { AddPlaceForm, EditPlaceForm } from '../features/places/PlaceForm.tsx';
 import { CATEGORIES, TAGS } from '../features/places/vocabulary.ts';
 import { Chip } from '../features/ui/Chip.tsx';
 
 const ALL = '전체';
+
+type Panel = { placeId: string; kind: 'tags' | 'edit' };
 
 const smallButton =
   'min-h-11 rounded-full px-3.5 text-[14px] font-semibold ring-1 transition-[transform,background-color,color] duration-200 ease-soft active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export default function Places() {
   const searchId = useId();
+  const session = useSession();
   const config = useAppConfig();
   const places = usePlaces();
   const prefs = usePrefs();
@@ -21,7 +24,14 @@ export default function Places() {
   const deferredQuery = useDeferredValue(query.trim());
   const [category, setCategory] = useState<string>(ALL);
   const [adding, setAdding] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [notice, setNotice] = useState('');
+  const userId = session.data?.id;
+
+  function togglePanel(placeId: string, kind: Panel['kind']) {
+    setNotice('');
+    setPanel(panel?.placeId === placeId && panel.kind === kind ? null : { placeId, kind });
+  }
 
   const prefById = useMemo(() => new Map((prefs.data ?? []).map((p) => [p.placeId, p])), [prefs.data]);
 
@@ -49,6 +59,10 @@ export default function Places() {
           <h1 className="text-[26px] leading-tight font-bold tracking-tight">식당 목록</h1>
           <p className="mt-1 text-[15px] text-ink-muted">
             {places.data ? `${places.data.length}곳, 걸어서 가까운 순` : '불러오는 중'}
+          </p>
+          {/* Always rendered so screen readers pick up each new notice. */}
+          <p role="status" className="text-[14px] font-semibold text-accent-ink not-empty:mt-2">
+            {notice}
           </p>
         </div>
         {!adding && (
@@ -104,7 +118,9 @@ export default function Places() {
         <ul className="flex flex-col gap-2">
           {rows.map(({ place, minutes }) => {
             const pref = prefById.get(place.id) ?? emptyPref(place.id);
-            const open = expanded === place.id;
+            const tagsOpen = panel?.placeId === place.id && panel.kind === 'tags';
+            const editOpen = panel?.placeId === place.id && panel.kind === 'edit';
+            const mine = place.source === 'manual' && userId !== undefined && place.createdBy === userId;
             return (
               <li
                 key={place.id}
@@ -114,6 +130,9 @@ export default function Places() {
                   <div className="min-w-0">
                     <p className="text-[16px] font-semibold break-keep">
                       {place.name}
+                      {place.source === 'manual' && (
+                        <span className="ml-2 text-[13px] font-medium text-ink-muted">{mine ? '내가 추가' : '사용자 추가'}</span>
+                      )}
                       {pref.isHidden && <span className="ml-2 text-[13px] font-medium text-ink-muted">숨김</span>}
                     </p>
                     <p className="mt-0.5 text-[14px] text-ink-muted">
@@ -143,14 +162,33 @@ export default function Places() {
                   </button>
                   <button
                     type="button"
-                    aria-expanded={open}
-                    onClick={() => setExpanded(open ? null : place.id)}
+                    aria-expanded={tagsOpen}
+                    onClick={() => togglePanel(place.id, 'tags')}
                     className={`${smallButton} bg-surface text-ink-muted ring-line`}
                   >
                     태그
                   </button>
+                  {mine && (
+                    <button
+                      type="button"
+                      aria-expanded={editOpen}
+                      onClick={() => togglePanel(place.id, 'edit')}
+                      className={`${smallButton} bg-surface text-ink-muted ring-line`}
+                    >
+                      수정
+                    </button>
+                  )}
                 </div>
-                {open && (
+                {editOpen && (
+                  <EditPlaceForm
+                    place={place}
+                    onDone={(message) => {
+                      setPanel(null);
+                      if (message) setNotice(message);
+                    }}
+                  />
+                )}
+                {tagsOpen && (
                   <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`${place.name} 태그`}>
                     {TAGS.map((tag) => {
                       const on = pref.tags.includes(tag);

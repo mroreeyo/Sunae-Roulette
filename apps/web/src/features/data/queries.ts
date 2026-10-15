@@ -9,6 +9,9 @@ const HISTORY_CALENDAR_DAYS = 45;
 
 export interface PlaceRow extends Place {
   address: string | null;
+  source: 'public' | 'manual';
+  /** Who added a manual place; only that user may edit or delete it. */
+  createdBy: string | null;
 }
 
 export interface MealRow extends Meal {
@@ -23,6 +26,8 @@ interface PlaceRecord {
   lat: number | null;
   lng: number | null;
   address: string | null;
+  source: 'public' | 'manual';
+  created_by: string | null;
   is_active: boolean;
 }
 
@@ -76,7 +81,7 @@ export function usePlaces() {
     queryFn: async (): Promise<PlaceRow[]> => {
       const { data, error } = await supabase
         .from('places')
-        .select('id, name, category, lat, lng, address, is_active')
+        .select('id, name, category, lat, lng, address, source, created_by, is_active')
         .eq('is_active', true)
         .returns<PlaceRecord[]>();
       if (error) throw error;
@@ -87,6 +92,8 @@ export function usePlaces() {
         lat: p.lat,
         lng: p.lng,
         address: p.address,
+        source: p.source,
+        createdBy: p.created_by,
         isActive: p.is_active,
       }));
     },
@@ -230,6 +237,37 @@ export function useAddPlace() {
   });
 }
 
+/** Updates a manual place the signed-in user added. RLS rejects every other row. */
+async function updateOwnPlace(placeId: string, patch: Record<string, unknown>): Promise<void> {
+  const { data, error } = await supabase.from('places').update(patch).eq('id', placeId).select('id');
+  if (error) throw error;
+  // RLS skips rows the user may not edit instead of raising, so nothing comes back.
+  if (data.length === 0) throw new Error('직접 추가한 사람만 고칠 수 있어요.');
+}
+
+export function useUpdatePlace() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ placeId, name, category, address }: NewPlaceInput & { placeId: string }) =>
+      updateOwnPlace(placeId, { name, category, address }),
+    // History shows place names, so meals are refetched too.
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: queryKeys.places }),
+        client.invalidateQueries({ queryKey: queryKeys.meals }),
+      ]),
+  });
+}
+
+/** Deleting deactivates the place, because meals may still reference it (TRD RLS table). */
+export function useRemovePlace() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (placeId: string) => updateOwnPlace(placeId, { is_active: false }),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.places }),
+  });
+}
+
 export function useSetCooldown() {
   const client = useQueryClient();
   return useMutation({
@@ -251,6 +289,24 @@ export function useDeleteMeal() {
     mutationFn: async (mealId: string) => {
       const { error } = await supabase.from('meals').delete().eq('id', mealId);
       if (error) throw error;
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meals }),
+  });
+}
+
+export function useChangeMealPlace() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ mealId, placeId }: { mealId: string; placeId: string }) => {
+      // A corrected meal is no longer the roulette's pick, so it drops out of the
+      // decision metrics like a team meal does (PRD success metrics).
+      const { data, error } = await supabase
+        .from('meals')
+        .update({ place_id: placeId, spin_count: null, decision_seconds: null })
+        .eq('id', mealId)
+        .select('id');
+      if (error) throw error;
+      if (data.length === 0) throw new Error('기록을 찾지 못했어요.');
     },
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meals }),
   });

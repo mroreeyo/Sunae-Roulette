@@ -153,8 +153,8 @@ create table meals (
   place_id uuid not null references places(id),
   eaten_on date not null default (now() at time zone 'Asia/Seoul')::date,
   room_id uuid,                    -- v2 마이그레이션에서 rooms(id) FK 추가
-  spin_count integer,              -- 확정까지 돌린 횟수, 팀 확정 기록은 null
-  decision_seconds integer,        -- 첫 돌리기부터 저장까지 걸린 초, 팀 확정 기록은 null
+  spin_count integer,              -- 확정까지 돌린 횟수, 팀 확정 기록과 식당을 바꾼 기록은 null
+  decision_seconds integer,        -- 첫 돌리기부터 저장까지 걸린 초, 위와 같이 null
   created_at timestamptz not null default now(),
   unique (user_id, eaten_on)       -- 하루 점심 1회
 );
@@ -224,11 +224,14 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 | 동작 | 호출 | 비고 |
 | --- | --- | --- |
 | 전역 설정 | `from('app_config').select().single()` | 기준 좌표·반경, 거리 계산과 설정 화면 표시용 |
-| 식당 목록 | `from('places').select().eq('is_active', true)` | 앱 시작 시 1회, 캐시 1시간 |
+| 식당 목록 | `from('places').select().eq('is_active', true)` | 앱 시작 시 1회, 캐시 1시간. `source`·`created_by`로 본인이 추가한 식당에만 수정 버튼을 보인다 |
 | 식당 직접 추가 | `from('places').insert({ source: 'manual', name, category, address? })` | 이름·카테고리 필수, 주소 선택. 위치는 비워 둔다 |
+| 식당 수정·삭제 | `from('places').update({ name, category, address }).eq('id', id).select('id')`, 삭제는 `update({ is_active: false })` | 본인이 추가한 `manual` 행만 바뀐다(RLS). RLS에 막힌 행은 오류 없이 0건이 돌아오므로 0건이면 실패로 처리한다. 이름이 바뀌면 기록 화면도 다시 조회한다 |
 | 개인 설정 | `from('user_place_prefs').select()` / `.upsert()` | 즐겨찾기·숨기기·태그 |
 | 최근 기록 | `from('meals').select('place_id, eaten_on, places(category)').gte('eaten_on', 30일 전)` | 쿨다운·통계 계산용. 비활성화된 식당의 기록도 카테고리 감점에 반영되도록 카테고리를 함께 받는다 |
 | 식사 저장 | `from('meals').upsert({ place_id, eaten_on, spin_count, decision_seconds }, { onConflict: 'user_id,eaten_on' })` | 같은 날 다시 저장하면 교체 |
+| 식사 기록 수정 | `from('meals').update({ place_id, spin_count: null, decision_seconds: null }).eq('id', id).select('id')` | 식당만 바꾸고 날짜는 그대로 둔다(하루 1회 기록). 바꾼 기록은 룰렛 결과가 아니므로 지표 컬럼을 비운다. 0건이면 실패로 처리 |
+| 식사 기록 삭제 | `from('meals').delete().eq('id', id)` | 본인 행만(RLS) |
 | 방 입장 (v2) | `rpc('join_room', { code, nickname })` | 방·후보·입장자 반환. 코드로 방을 찾는 유일한 경로 |
 | 투표 (v2) | `from('votes').upsert({ room_id, candidate_id }, { onConflict: 'room_id,voter_id' })` | 마감 전만 허용 (RLS) |
 | 실시간 구독 (v2) | `channel('room:{id}')`에 `postgres_changes`를 `votes`·`room_members`(`room_id=eq.{id}`), `rooms`(`id=eq.{id}`)로 등록 | 득표 재집계, 입장자 목록, 확정 결과 표시 |
@@ -305,9 +308,9 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 | `recommend()` | Vitest 단위 테스트, 고정 난수 | 쿨다운 안 식당 제외(영업일 계산, 월요일 포함), 직전 식사 카테고리 ×0.3, 카테고리 감점 중복 미적용, 후보 0곳일 때 쿨다운 완화, 세션 소진 시 결과 구분, 위치 없는 식당의 거리 필터 처리, 가중치 분포가 1만 회 시뮬레이션에서 기대 확률 ±1.5%p (p=0.5 기준 약 3σ) |
 | 좌표 변환 | Vitest | 실제 파일의 수내역 인근 업소 좌표가 검증된 위경도로 변환됨 (회귀 고정) |
 | 가져오기 변환 | Vitest + CSV 픽스처 | 분당구·영업 중 행만 통과, 폐업 관리번호 수집, 좌표 없는 행 건너뜀, 반경 밖 제외, 업태 매핑·제외 업태·상호명 카페 제외, 필수 컬럼 누락 시 중단 |
-| RLS·가져오기 함수 | Supabase 로컬 + pgTAP(`supabase test db`) | 남의 `meals` 조회 불가, 하루 1회 기록, 사용자가 `public` 행 추가·수정 불가, 남이 추가한 식당 수정 불가, 비로그인 조회 불가, 사용자가 `import_places` 실행 불가, 누락 2회 시 비활성, 폐업 즉시 비활성. v2: 입장 없이 `rooms` 조회 불가, 다른 방 후보 투표 거부, 마감 후 투표 거부 |
+| RLS·가져오기 함수 | Supabase 로컬 + pgTAP(`supabase test db`) | 남의 `meals` 조회·수정 불가, 본인 기록의 식당 변경 가능·다른 사용자에게 넘기기 불가, 하루 1회 기록, 사용자가 `public` 행 추가·수정 불가, 본인이 추가한 식당 수정·비활성화 가능, 남이 추가한 식당 수정·비활성화 불가, `manual` 행을 `public`으로 바꾸기 불가, 비로그인 조회 불가, 사용자가 `import_places` 실행 불가, 누락 2회 시 비활성, 폐업 즉시 비활성. v2: 입장 없이 `rooms` 조회 불가, 다른 방 후보 투표 거부, 마감 후 투표 거부 |
 | 방 확정 | SQL 테스트 | 동점 시 weight 우선, 0표 방 처리, 기존 개인 기록 유지 |
-| 화면 흐름 | Playwright | 돌리기 → 여기 갈래 → 기록 화면에 표시, 두 브라우저 동시 투표와 확정 결과 표시 |
+| 화면 흐름 | Playwright | 돌리기 → 여기 갈래 → 기록 화면에 표시, 지난 기록의 식당 바꾸기, 직접 추가한 식당 수정·삭제(다른 사용자에게는 수정 버튼 없음, 삭제 후에도 기록 유지), 두 브라우저 동시 투표와 확정 결과 표시 |
 
 ## 변경 이력
 
@@ -318,3 +321,4 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 - 2026-10-14: 오프라인 캐시 영속화(범위와 한계 명시), 캐시 소유자 확인, 이메일 계정 연결 구현. 배포는 README의 절차로 진행하고, Vercel은 `apps/web/vercel.json`의 SPA 재작성 규칙을 쓴다.
 - 2026-10-14: v1 정식 범위 구현. 상호명 기반 비식당 제외 규칙(PC방, 홀덤펍, 술집 등)을 추가하고 제외 행을 바로 비활성화하도록 했다(로컬 데이터 기준 15곳 비활성화, 활성 252곳). 기록 통계는 `packages/core`의 `mealStats()`로 계산하고, 필터는 Zustand `persist`로 localStorage에 기억한다.
 - 2026-10-14: 홈 화면 배경에 수내역 사진 잔상 효과 추가(three.js `AfterimagePass`, 지연 로딩). 첫 화면 번들 예산에서 지연 로딩 파일을 분리하고, 배경 효과의 렌더링·접근성 기준과 사진 라이선스 표시를 정의했다. Motion은 `LazyMotion` 방식으로 바꿔 첫 화면 번들을 176.6KB에서 163.1KB로 줄였다.
+- 2026-10-15: 식사 기록 수정과 직접 추가한 식당의 수정·삭제 구현. 기록 수정은 `place_id`만 바꾸고 `spin_count`·`decision_seconds`를 비워 지표에서 뺀다. 식당 목록 조회에 `source`·`created_by`를 더해 본인이 추가한 식당을 구분하고, RLS에 막혀 0건이 갱신되면 실패로 처리한다. 클라이언트 호출 표와 pgTAP·Playwright 테스트 범위를 보강했다.

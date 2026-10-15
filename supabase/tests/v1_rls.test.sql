@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(23);
 
 -- Fixtures (as the migration owner, bypassing RLS) ---------------------------
 insert into auth.users (id, email) values
@@ -61,11 +61,53 @@ select is_empty(
   $$ update public.places set name = '남의것' where source = 'manual' returning id $$,
   'B cannot edit A''s manual place'
 );
+select is_empty(
+  $$ update public.places set is_active = false where source = 'manual' returning id $$,
+  'B cannot delete A''s manual place'
+);
+select is_empty(
+  $$ update public.meals set spin_count = 2 returning id $$,
+  'B cannot edit A''s meal'
+);
 -- Count only this test's rows so the result does not depend on imported data.
 select is(
   (select count(*)::int from public.places where source_id = 'pub-1' or name = '직접추가집'),
   2,
   'B can read every place, including another user''s manual place'
+);
+
+-- User A edits their own rows -------------------------------------------------
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
+
+select results_eq(
+  $$ update public.places set name = '직접추가집 2호점', category = '한식'
+     where name = '직접추가집' returning name, category $$,
+  $$ values ('직접추가집 2호점', '한식') $$,
+  'A can edit their own manual place'
+);
+select throws_ok(
+  $$ update public.places set source = 'public', source_id = 'stolen-1', lat = 37.0, lng = 127.0
+     where name = '직접추가집 2호점' $$,
+  '42501', null,
+  'A cannot turn their manual place into a public one'
+);
+select results_eq(
+  $$ update public.meals
+     set place_id = (select id from public.places where name = '직접추가집 2호점'),
+         spin_count = null, decision_seconds = null
+     where eaten_on = '2026-10-14' returning eaten_on $$,
+  $$ values ('2026-10-14'::date) $$,
+  'A can move their meal to another place'
+);
+select throws_ok(
+  $$ update public.meals set user_id = '00000000-0000-0000-0000-00000000000b' $$,
+  '42501', null,
+  'A cannot hand their meal to another user'
+);
+select results_eq(
+  $$ update public.places set is_active = false where name = '직접추가집 2호점' returning is_active $$,
+  $$ values (false) $$,
+  'A can delete their manual place by deactivating it'
 );
 
 -- Anonymous (not signed in) --------------------------------------------------
