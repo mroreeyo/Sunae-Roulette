@@ -1,6 +1,6 @@
 /**
- * Plain URL links to map services. These are not API calls, so nothing from
- * the map providers is stored (their APIs forbid storing responses).
+ * Plain URL links to map and search services. These are not API calls, so nothing
+ * from the providers is stored (their APIs forbid storing responses).
  */
 export interface MapTarget {
   name: string;
@@ -11,7 +11,10 @@ export interface MapTarget {
 
 /** "(수내동)" or "수내동 12-3" → "수내동". Helps map search find the right branch. */
 function neighbourhood(address: string | null): string | null {
-  return address?.match(/([가-힣0-9]+동)(?:[\s,)]|$)/)?.[1] ?? null;
+  if (!address) return null;
+  // Road addresses put the neighbourhood first in parentheses, after building numbers such as "602동".
+  const parenthesised = address.match(/\(([가-힣][가-힣0-9]*동)[\s,)]/)?.[1];
+  return parenthesised ?? address.match(/(?:^|[\s,])([가-힣][가-힣0-9]*동)(?=[\s,)]|$)/)?.[1] ?? null;
 }
 
 function searchQuery(target: MapTarget): string {
@@ -30,4 +33,12 @@ export function kakaoMapUrl(target: MapTarget): string {
 
 export function naverMapUrl(target: MapTarget): string {
   return `https://map.naver.com/p/search/${encodeURIComponent(searchQuery(target))}`;
+}
+
+/**
+ * Naver search for the place's menu. The result usually opens with the place card and
+ * its menu; Naver has no menu API we may use. Phones are redirected to the mobile page.
+ */
+export function naverMenuUrl(target: MapTarget): string {
+  return `https://search.naver.com/search.naver?query=${encodeURIComponent(`${searchQuery(target)} 메뉴`)}`;
 }
