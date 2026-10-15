@@ -17,7 +17,7 @@ import {
 /** Cached places and meals are good enough for a lunch pick for a day. */
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 /** Bump when a cached query's shape changes so old caches are dropped. */
-const CACHE_BUSTER = 'v1';
+const CACHE_BUSTER = 'v2';
 const CACHE_KEY = 'lunch-query-cache';
 
 export const queryClient = new QueryClient({

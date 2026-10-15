@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 type SupabaseModule = typeof import('../src/lib/supabase.ts');
+type QueryClientModule = typeof import('../src/lib/queryClient.ts');
 
 /** Seoul calendar date `days` days ago, as YYYY-MM-DD. */
 function seoulDateDaysAgo(days: number): string {
@@ -10,7 +11,8 @@ function seoulDateDaysAgo(days: number): string {
 /**
  * Inserts a meal through the page's own signed-in Supabase client, which the Vite dev
  * server serves as a module. The UI only records today's meal, so this is how a test
- * gets a past one. Call it after the page has finished signing in.
+ * gets a past one. Call it after the page has finished signing in. The app's meal list
+ * is then invalidated, since a reload would restore the still-fresh persisted cache.
  */
 async function seedMeal(page: Page, placeName: string, eatenOn: string): Promise<void> {
   await page.evaluate(
@@ -23,6 +25,9 @@ async function seedMeal(page: Page, placeName: string, eatenOn: string): Promise
         .from('meals')
         .insert({ place_id: place.id, eaten_on: eatenOn, spin_count: 1, decision_seconds: 20 });
       if (insertError) throw insertError;
+      const clientPath = '/src/lib/queryClient.ts';
+      const { queryClient } = (await import(/* @vite-ignore */ clientPath)) as QueryClientModule;
+      await queryClient.invalidateQueries({ queryKey: ['meals'] });
     },
     { placeName, eatenOn },
   );
@@ -47,7 +52,6 @@ test('a past meal can be moved to the place you actually went to', async ({ page
   await expect(page.getByText('아직 기록이 없어요.')).toBeVisible();
   const [recorded, actual] = await twoDistinctPlaces(page);
   await seedMeal(page, recorded, seoulDateDaysAgo(2));
-  await page.reload();
 
   const meals = page.getByRole('list', { name: '식사 목록' });
   const row = meals.getByRole('listitem').filter({ hasText: recorded });
@@ -59,17 +63,15 @@ test('a past meal can be moved to the place you actually went to', async ({ page
   await expect(meals).toContainText(actual);
   await expect(meals).not.toContainText(recorded);
 
-  // The change is saved, and the corrected meal no longer counts toward the roulette metrics.
-  await page.reload();
-  await expect(meals).toContainText(actual);
-  const metrics = await page.evaluate(async () => {
+  // The server has the new place, and the corrected meal no longer counts toward the roulette metrics.
+  const saved = await page.evaluate(async () => {
     const modulePath = '/src/lib/supabase.ts';
     const { supabase } = (await import(/* @vite-ignore */ modulePath)) as SupabaseModule;
-    const { data, error } = await supabase.from('meals').select('spin_count, decision_seconds').single();
+    const { data, error } = await supabase.from('meals').select('spin_count, decision_seconds, places(name)').single();
     if (error) throw error;
     return data;
   });
-  expect(metrics).toEqual({ spin_count: null, decision_seconds: null });
+  expect(saved).toEqual({ spin_count: null, decision_seconds: null, places: { name: actual } });
 });
 
 test('the meal editor points to adding a place when nothing matches', async ({ page }) => {
@@ -77,7 +79,6 @@ test('the meal editor points to adding a place when nothing matches', async ({ p
   await expect(page.getByText('아직 기록이 없어요.')).toBeVisible();
   const [recorded] = await twoDistinctPlaces(page);
   await seedMeal(page, recorded, seoulDateDaysAgo(1));
-  await page.reload();
 
   const row = page.getByRole('list', { name: '식사 목록' }).getByRole('listitem').filter({ hasText: recorded });
   await row.getByRole('button', { name: /기록 수정$/ }).click();
