@@ -1,5 +1,16 @@
 import { addDays, toSeoulDate, type LatLng, type Meal, type Place, type PlacePref } from '@lunch/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  hydrate,
+  matchMutation,
+  mutationOptions,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+  type Mutation,
+  type MutationFilters,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { ensureSession, supabase } from '../../lib/supabase.ts';
 
 /** Cooldown used until the user changes it in settings (PRD default). */
@@ -160,27 +171,140 @@ export function useRecentMeals() {
 
 export interface SaveMealInput {
   placeId: string;
+  /** Seoul date of the tap, so a save queued offline keeps that day even if it runs later. */
+  eatenOn: string;
   spinCount: number;
   decisionSeconds: number;
 }
 
-export function useSaveMeal() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ placeId, spinCount, decisionSeconds }: SaveMealInput) => {
-      const { error } = await supabase.from('meals').upsert(
-        {
-          place_id: placeId,
-          eaten_on: toSeoulDate(new Date()),
-          spin_count: spinCount,
-          decision_seconds: decisionSeconds,
-        },
-        { onConflict: 'user_id,eaten_on' },
-      );
-      if (error) throw error;
-    },
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meals }),
+const saveMealKey = ['saveMeal'] as const;
+
+/**
+ * Set on every mutation restored from the persisted cache (see `lib/queryClient.ts`). No screen
+ * watches a restored save, so the home screen reports the ones that fail.
+ */
+export const restoredMutationMeta = { restored: true } as const;
+
+/** Set on a save that failed after the screen that made it was left, e.g. home was left while offline. */
+const leftBehindSaveMeta = { leftBehind: true } as const;
+
+const failedUnwatchedSaveFilters = {
+  mutationKey: saveMealKey,
+  status: 'error',
+  predicate: (mutation) => mutation.meta?.restored === true || mutation.meta?.leftBehind === true,
+} satisfies MutationFilters;
+
+/** A save that failed with no screen showing it: resumed after a restart, or left behind by the home screen. */
+export function isFailedUnwatchedSave(mutation: Mutation): boolean {
+  return matchMutation(failedUnwatchedSaveFilters, mutation);
+}
+
+function removeFailedUnwatchedSaves(client: QueryClient, eatenOn: string): void {
+  const cache = client.getMutationCache();
+  for (const failed of cache.findAll(failedUnwatchedSaveFilters)) {
+    if ((failed.state.variables as SaveMealInput | undefined)?.eatenOn === eatenOn) cache.remove(failed);
+  }
+}
+
+/**
+ * Keeps a save that fails while no screen watches it, so the home screen can report it. The result
+ * card shows a save made on the home screen, but moving to another tab while it waits takes the card
+ * away, and an unwatched failed mutation is garbage collected within minutes. Such a failure is put
+ * back the way a restored one is: marked, and kept until the user retries or dismisses it.
+ *
+ * Mutations expose no observer count, so one is kept from the cache's observer events. A save that
+ * fails in front of its result card is left alone; the card shows that error.
+ */
+export function keepFailedUnwatchedSaves(client: QueryClient): () => void {
+  const cache = client.getMutationCache();
+  const observers = new WeakMap<Mutation, Set<unknown>>();
+  return cache.subscribe((event) => {
+    if (event.type === 'observerAdded' || event.type === 'observerRemoved') {
+      const watching = observers.get(event.mutation) ?? new Set();
+      if (event.type === 'observerAdded') watching.add(event.observer);
+      else watching.delete(event.observer);
+      observers.set(event.mutation, watching);
+      return;
+    }
+    if (event.type !== 'updated' || event.action.type !== 'error') return;
+    const { mutation } = event;
+    if (observers.get(mutation)?.size) return;
+    if (!matchMutation({ mutationKey: saveMealKey }, mutation) || isFailedUnwatchedSave(mutation)) return;
+    cache.remove(mutation);
+    hydrate(
+      client,
+      { mutations: [{ mutationKey: saveMealKey, state: mutation.state, meta: leftBehindSaveMeta }], queries: [] },
+      { defaultOptions: { mutations: { gcTime: Infinity } } },
+    );
   });
+}
+
+/** postgrest-js reports a request that got no response (offline, DNS, timeout) with an empty code. */
+function isNetworkFailure(error: unknown): boolean {
+  return !(error as { code?: string } | null)?.code;
+}
+
+/**
+ * Also the client's mutation defaults for this key (see `lib/queryClient.ts`), so a save
+ * persisted while paused offline can still run after the app is closed and opened again.
+ */
+export const saveMealOptions = mutationOptions({
+  mutationKey: saveMealKey,
+  mutationFn: async ({ placeId, eatenOn, spinCount, decisionSeconds }: SaveMealInput) => {
+    const { error } = await supabase.from('meals').upsert(
+      {
+        place_id: placeId,
+        eaten_on: eatenOn,
+        spin_count: spinCount,
+        decision_seconds: decisionSeconds,
+      },
+      { onConflict: 'user_id,eaten_on' },
+    );
+    if (error) throw error;
+  },
+  // The upsert is safe to repeat, so a request that got no response is sent again. If the
+  // device goes offline in between, the retry waits for the connection instead of failing.
+  retry: (failureCount, error) => failureCount < 2 && isNetworkFailure(error),
+  retryDelay: (failureCount) => (failureCount + 1) * 1000,
+  onSuccess: (_data, input, _result, { client }) => {
+    // The day is recorded now, so an earlier failed save for that day no longer needs a notice.
+    removeFailedUnwatchedSaves(client, input.eatenOn);
+    return client.invalidateQueries({ queryKey: queryKeys.meals });
+  },
+});
+
+export function useSaveMeal() {
+  return useMutation(saveMealOptions);
+}
+
+export interface FailedSave {
+  input: SaveMealInput;
+  message: string;
+  /** Sent when the app was opened again, rather than after the home screen was left. */
+  restored: boolean;
+}
+
+/**
+ * Saves that failed with no screen showing them, one per day: a later save for a day replaces an
+ * earlier one, so the latest is kept. Each stays until it is retried, superseded or dismissed.
+ */
+export function useFailedUnwatchedSaves(): FailedSave[] {
+  const failures = useMutationState({
+    filters: failedUnwatchedSaveFilters,
+    select: (mutation) => ({
+      input: mutation.state.variables as SaveMealInput,
+      // An error restored from storage is a plain object and may have lost its message.
+      message: mutation.state.error?.message ?? '',
+      restored: mutation.meta?.restored === true,
+    }),
+  });
+  return [...new Map(failures.map((f) => [f.input.eatenOn, f])).values()];
+}
+
+/** Drops the failed unwatched saves for a day, leaving that day unrecorded. */
+export function useDismissFailedSave() {
+  const client = useQueryClient();
+  return (eatenOn: string) => removeFailedUnwatchedSaves(client, eatenOn);
 }
 
 /** Fields a user can change on their own copy of a place. */
