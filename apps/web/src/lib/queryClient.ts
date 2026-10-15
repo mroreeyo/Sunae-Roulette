@@ -6,7 +6,13 @@ import {
   type Persister,
   type PersistQueryClientProviderProps,
 } from '@tanstack/react-query-persist-client';
-import { isFailedRestoredSave, queryKeys, restoredMutationMeta, saveMealOptions } from '../features/data/queries.ts';
+import {
+  isFailedUnwatchedSave,
+  keepFailedUnwatchedSaves,
+  queryKeys,
+  restoredMutationMeta,
+  saveMealOptions,
+} from '../features/data/queries.ts';
 
 /** Cached places and meals are good enough for a lunch pick for a day. */
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +35,8 @@ export const queryClient = new QueryClient({
 // A save paused offline is persisted without its functions. Registered before the cache is
 // restored, these defaults let it run when the app is opened again.
 queryClient.setMutationDefaults(saveMealOptions.mutationKey, saveMealOptions);
+// A save that fails after the home screen was left is kept for the notice there.
+keepFailedUnwatchedSaves(queryClient);
 
 function browserStorage(): Storage | undefined {
   try {
@@ -92,8 +100,8 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
   dehydrateOptions: {
     // The session is re-checked on every start, so it is never restored from the cache.
     shouldDehydrateQuery: (query) => query.state.status === 'success' && query.queryKey[0] !== queryKeys.session[0],
-    // Paused mutations, plus failed restored saves so their notice survives a reload.
-    shouldDehydrateMutation: (mutation) => defaultShouldDehydrateMutation(mutation) || isFailedRestoredSave(mutation),
+    // Paused mutations, plus failed unwatched saves so their notice survives a reload.
+    shouldDehydrateMutation: (mutation) => defaultShouldDehydrateMutation(mutation) || isFailedUnwatchedSave(mutation),
   },
 };
 

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import {
   saveMealOptions,
   useDismissFailedSave,
-  useFailedRestoredSaves,
+  useFailedUnwatchedSaves,
   usePlaces,
   type FailedSave,
 } from '../data/queries.ts';
@@ -18,11 +18,12 @@ function dayLabel(eatenOn: string): string {
 }
 
 /**
- * Saves queued offline that ran when the app was opened again and failed. No result card
- * is showing them, so without this notice the meal would be lost without a word.
+ * Saves that failed with no result card showing them: queued offline and sent when the app was
+ * opened again, or still waiting when the user moved to another tab. Without this notice the
+ * meal would be lost without a word.
  */
 export function FailedSaveNotices() {
-  const failures = useFailedRestoredSaves();
+  const failures = useFailedUnwatchedSaves();
   const places = usePlaces();
   return (
     <>
@@ -42,6 +43,10 @@ function FailedSaveNotice({ failure, placeName }: { failure: FailedSave; placeNa
   const retry = useMutation(saveMealOptions);
   const dismiss = useDismissFailedSave();
   const message = retry.error?.message ?? failure.message;
+  const place = placeName ?? '식당';
+  const cause = failure.restored
+    ? `오프라인일 때 고른 ${place} 기록을 앱을 다시 열면서 보냈는데 저장되지 않았어요.`
+    : `룰렛 화면을 떠난 사이에 보낸 ${place} 기록이 저장되지 않았어요.`;
 
   return (
     <div role="alert" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
@@ -49,7 +54,7 @@ function FailedSaveNotice({ failure, placeName }: { failure: FailedSave; placeNa
       <p className="mt-1 text-[14px] break-keep text-ink-muted">
         {retry.isPaused
           ? '지금은 오프라인이에요. 연결되면 바로 기록할게요.'
-          : `오프라인일 때 고른 ${placeName ?? '식당'} 기록을 앱을 다시 열면서 보냈는데 저장되지 않았어요. 연결을 확인하고 다시 기록해 주세요.${
+          : `${cause} 연결을 확인하고 다시 기록해 주세요.${
               message && !retry.isPending ? ` (${message})` : ''
             }`}
       </p>
