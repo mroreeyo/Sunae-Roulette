@@ -1,6 +1,6 @@
 import type { Candidate } from '@lunch/core';
 import { m, useReducedMotion } from 'motion/react';
-import { kakaoMapUrl, naverMapUrl, naverMenuUrl } from '../../lib/mapLinks.ts';
+import { kakaoMapUrl, naverMapUrl } from '../../lib/mapLinks.ts';
 import type { PlaceRow } from '../data/queries.ts';
 
 interface ResultCardProps {
@@ -40,15 +40,6 @@ export function ResultCard({ candidate, saved, saving, waitingForNetwork, saveEr
           {walkMinutes === null ? '도보 시간 알 수 없음' : `걸어서 약 ${Math.max(1, Math.round(walkMinutes))}분`}
           {place.address ? ` · ${place.address.replace(/^경기도 성남시 분당구 /, '')}` : ''}
         </p>
-        {/* Shown before deciding, since the menu is what people check first. */}
-        <a
-          className="mt-1 inline-flex min-h-11 items-center text-[15px] font-semibold text-accent-ink underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          href={naverMenuUrl(place)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          네이버에서 메뉴 보기
-        </a>
 
         {saved ? (
           <div className="mt-5">

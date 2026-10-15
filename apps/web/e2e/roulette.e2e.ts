@@ -10,14 +10,6 @@ test('spin, accept, and see the meal in history', async ({ page }) => {
   await expect(accept).toBeVisible({ timeout: 6_000 });
   const pickedName = await page.locator('#result-name').innerText();
 
-  // The menu link is there before deciding and searches Naver for this place's menu.
-  const menuHref = await page.getByRole('link', { name: '네이버에서 메뉴 보기' }).getAttribute('href');
-  const menuUrl = new URL(menuHref!);
-  expect(menuUrl.origin + menuUrl.pathname).toBe('https://search.naver.com/search.naver');
-  const query = menuUrl.searchParams.get('query')!;
-  expect(query.startsWith(`${pickedName} `)).toBe(true);
-  expect(query.endsWith(' 메뉴')).toBe(true);
-
   await accept.click();
   await expect(page.getByText('오늘 점심으로 기록했어요.')).toBeVisible();
   await expect(page.getByRole('link', { name: '카카오맵 길찾기' })).toHaveAttribute('href', /map\.kakao\.com\/link\/to\//);
