@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { kakaoMapUrl, naverMapUrl } from './mapLinks.ts';
 
-const located = {
+const place = {
   name: '소월곰탕, 분당점',
   lat: 37.378137,
   lng: 127.112305,
@@ -9,27 +9,13 @@ const located = {
 };
 
 describe('kakaoMapUrl', () => {
-  it('builds a directions link and strips commas from the name', () => {
-    expect(kakaoMapUrl(located)).toBe(
-      `https://map.kakao.com/link/to/${encodeURIComponent('소월곰탕  분당점')},37.378137,127.112305`,
-    );
-  });
-
-  it('falls back to a search link when the place has no location', () => {
-    expect(kakaoMapUrl({ ...located, lat: null, lng: null })).toBe(
-      `https://map.kakao.com/link/search/${encodeURIComponent('소월곰탕, 분당점 수내동')}`,
-    );
+  it('searches by the place name only, not directions to its location', () => {
+    expect(kakaoMapUrl(place)).toBe(`https://map.kakao.com/link/search/${encodeURIComponent('소월곰탕, 분당점')}`);
   });
 });
 
 describe('naverMapUrl', () => {
   it('searches by the place name only, without the neighbourhood', () => {
-    expect(naverMapUrl(located)).toBe(`https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점')}`);
-  });
-
-  it('searches by the name for a place without an address', () => {
-    expect(naverMapUrl({ ...located, address: null })).toBe(
-      `https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점')}`,
-    );
+    expect(naverMapUrl(place)).toBe(`https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점')}`);
   });
 });

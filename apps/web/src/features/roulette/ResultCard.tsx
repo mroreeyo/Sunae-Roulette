@@ -46,7 +46,7 @@ export function ResultCard({ candidate, saved, saving, waitingForNetwork, saveEr
             <p className="text-[15px] font-semibold text-accent-ink">오늘 점심으로 기록했어요.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <a className={`${buttonBase} bg-accent text-on-accent`} href={kakaoMapUrl(place)} target="_blank" rel="noreferrer">
-                카카오맵 길찾기
+                카카오맵
               </a>
               <a className={`${buttonBase} bg-surface-2 text-ink`} href={naverMapUrl(place)} target="_blank" rel="noreferrer">
                 네이버 지도
