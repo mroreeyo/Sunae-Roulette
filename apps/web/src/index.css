@@ -3,43 +3,27 @@
 /*
  * Design tokens. One accent (orange) on neutral zinc greys.
  * Radius rule: cards 24px, buttons and chips fully rounded.
- * Light accent is orange-700 so white text passes WCAG AA (5.2:1);
- * dark mode flips to a light orange with near-black text.
+ * The app is always dark, whatever the device setting: a light orange
+ * accent with near-black text on it.
  */
 :root {
-  color-scheme: light dark;
-  --bg: #f4f4f5;
-  --surface: #fafafa;
-  --surface-2: #e4e4e7;
-  --ink: #18181b;
-  --ink-muted: #52525b;
-  --line: rgb(24 24 27 / 0.08);
-  --accent: #c2410c;
-  --on-accent: #fff7ed;
-  --accent-soft: #ffedd5;
-  --accent-ink: #9a3412;
-  --shadow: rgb(24 24 27 / 0.06);
+  color-scheme: dark;
+  --bg: #0f0f11;
+  --surface: #18181b;
+  --surface-2: #27272a;
+  --ink: #f4f4f5;
+  --ink-muted: #a1a1aa;
+  --line: rgb(255 255 255 / 0.08);
+  --accent: #fb923c;
+  --on-accent: #1c1917;
+  --accent-soft: rgb(251 146 60 / 0.14);
+  --accent-ink: #fdba74;
+  --shadow: rgb(0 0 0 / 0.4);
 
   font-family:
     'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
     'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f11;
-    --surface: #18181b;
-    --surface-2: #27272a;
-    --ink: #f4f4f5;
-    --ink-muted: #a1a1aa;
-    --line: rgb(255 255 255 / 0.08);
-    --accent: #fb923c;
-    --on-accent: #1c1917;
-    --accent-soft: rgb(251 146 60 / 0.14);
-    --accent-ink: #fdba74;
-    --shadow: rgb(0 0 0 / 0.4);
-  }
 }
 
 @theme inline {
