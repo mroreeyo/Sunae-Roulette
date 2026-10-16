@@ -19,6 +19,10 @@
   --accent-soft: rgb(251 146 60 / 0.14);
   --accent-ink: #fdba74;
   --shadow: rgb(0 0 0 / 0.4);
+  /* Brand colours for the map links; near-black text keeps WCAG AA on both. */
+  --kakao: #fee500;
+  --naver: #03c75a;
+  --on-brand: #191919;
 
   font-family:
     'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
@@ -37,6 +41,9 @@
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-kakao: var(--kakao);
+  --color-naver: var(--naver);
+  --color-on-brand: var(--on-brand);
   --ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
