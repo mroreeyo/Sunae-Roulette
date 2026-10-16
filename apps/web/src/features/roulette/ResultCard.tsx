@@ -2,7 +2,6 @@ import type { Candidate } from '@lunch/core';
 import { m, useReducedMotion } from 'motion/react';
 import { kakaoMapUrl, naverMapUrl } from '../../lib/mapLinks.ts';
 import type { PlaceRow } from '../data/queries.ts';
-import { KakaoMark, NaverMark } from './BrandMarks.tsx';
 
 interface ResultCardProps {
   candidate: Candidate & { place: PlaceRow };
@@ -46,12 +45,10 @@ export function ResultCard({ candidate, saved, saving, waitingForNetwork, saveEr
           <div className="mt-5">
             <p className="text-[15px] font-semibold text-accent-ink">오늘 점심으로 기록했어요.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <a className={`${buttonBase} gap-2 bg-kakao text-on-brand`} href={kakaoMapUrl(place)} target="_blank" rel="noreferrer">
-                <KakaoMark className="h-4 w-8 shrink-0" />
+              <a className={`${buttonBase} bg-kakao text-on-brand`} href={kakaoMapUrl(place)} target="_blank" rel="noreferrer">
                 카카오맵
               </a>
-              <a className={`${buttonBase} gap-2 bg-naver text-on-brand`} href={naverMapUrl(place)} target="_blank" rel="noreferrer">
-                <NaverMark className="size-3.5 shrink-0" />
+              <a className={`${buttonBase} bg-naver text-on-brand`} href={naverMapUrl(place)} target="_blank" rel="noreferrer">
                 네이버 지도
               </a>
             </div>
