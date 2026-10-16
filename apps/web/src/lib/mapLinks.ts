@@ -28,6 +28,7 @@ export function kakaoMapUrl(target: MapTarget): string {
   return `https://map.kakao.com/link/search/${encodeURIComponent(searchQuery(target))}`;
 }
 
+/** Searches by the place name alone; nothing else is added to the query. */
 export function naverMapUrl(target: MapTarget): string {
-  return `https://map.naver.com/p/search/${encodeURIComponent(searchQuery(target))}`;
+  return `https://map.naver.com/p/search/${encodeURIComponent(target.name)}`;
 }

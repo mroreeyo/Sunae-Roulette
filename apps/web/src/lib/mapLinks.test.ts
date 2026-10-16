@@ -23,13 +23,11 @@ describe('kakaoMapUrl', () => {
 });
 
 describe('naverMapUrl', () => {
-  it('searches by name plus neighbourhood', () => {
-    expect(naverMapUrl(located)).toBe(
-      `https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점 수내동')}`,
-    );
+  it('searches by the place name only, without the neighbourhood', () => {
+    expect(naverMapUrl(located)).toBe(`https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점')}`);
   });
 
-  it('searches by name alone when the address has no neighbourhood', () => {
+  it('searches by the name for a place without an address', () => {
     expect(naverMapUrl({ ...located, address: null })).toBe(
       `https://map.naver.com/p/search/${encodeURIComponent('소월곰탕, 분당점')}`,
     );

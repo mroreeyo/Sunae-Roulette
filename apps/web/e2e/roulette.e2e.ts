@@ -13,7 +13,11 @@ test('spin, accept, and see the meal in history', async ({ page }) => {
   await accept.click();
   await expect(page.getByText('오늘 점심으로 기록했어요.')).toBeVisible();
   await expect(page.getByRole('link', { name: '카카오맵 길찾기' })).toHaveAttribute('href', /map\.kakao\.com\/link\/to\//);
-  await expect(page.getByRole('link', { name: '네이버 지도' })).toHaveAttribute('href', /map\.naver\.com\/p\/search\//);
+  // Naver Map searches by the place name alone.
+  await expect(page.getByRole('link', { name: '네이버 지도' })).toHaveAttribute(
+    'href',
+    `https://map.naver.com/p/search/${encodeURIComponent(pickedName)}`,
+  );
 
   await page.getByRole('link', { name: '기록' }).click();
   await expect(page.getByRole('list', { name: '식사 목록' }).getByRole('listitem').filter({ hasText: pickedName })).toBeVisible();
