@@ -11,7 +11,7 @@ import {
   type MutationFilters,
   type QueryClient,
 } from '@tanstack/react-query';
-import { ensureSession, supabase } from '../../lib/supabase.ts';
+import { ensureSession, requireSession, supabase } from '../../lib/supabase.ts';
 
 /** Cooldown used until the user changes it in settings (PRD default). */
 export const DEFAULT_COOLDOWN_DAYS = 5;
@@ -251,6 +251,8 @@ function isNetworkFailure(error: unknown): boolean {
 export const saveMealOptions = mutationOptions({
   mutationKey: saveMealKey,
   mutationFn: async ({ placeId, eatenOn, spinCount, decisionSeconds }: SaveMealInput) => {
+    // Without a user token the upsert would go out as anon and fail RLS.
+    await requireSession();
     const { error } = await supabase.from('meals').upsert(
       {
         place_id: placeId,

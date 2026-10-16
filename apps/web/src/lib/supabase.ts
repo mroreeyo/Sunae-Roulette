@@ -6,7 +6,36 @@ if (!url || !anonKey) {
   throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set (see apps/web/.env.example)');
 }
 
-export const supabase = createClient(url, anonKey);
+function attempt<T>(action: () => T): T | null {
+  try {
+    return action();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * localStorage with an in-memory copy of everything this page wrote. supabase-js reads the
+ * session from storage before every request and sends the anon key when the read comes back
+ * empty. On an iPhone opened from the QR code, a save right after sign-up went out that way
+ * and RLS rejected it (production, 2026-10-16), so a session this page received is kept.
+ */
+function authStorage() {
+  const memory = new Map<string, string>();
+  return {
+    getItem: (key: string) => attempt(() => window.localStorage.getItem(key)) ?? memory.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memory.set(key, value);
+      attempt(() => window.localStorage.setItem(key, value));
+    },
+    removeItem: (key: string) => {
+      memory.delete(key);
+      attempt(() => window.localStorage.removeItem(key));
+    },
+  };
+}
+
+export const supabase = createClient(url, anonKey, { auth: { storage: authStorage() } });
 
 let pending: Promise<User> | null = null;
 
@@ -29,4 +58,16 @@ export function ensureSession(): Promise<User> {
 /** Forget the memoized session after the signed-in user changes. */
 export function forgetSession(): void {
   pending = null;
+}
+
+/**
+ * Makes sure the next request carries a user token. If the session is gone (for example the
+ * browser cleared its storage and this page was reloaded), signs in again rather than letting
+ * a write go out as anon and fail RLS.
+ */
+export async function requireSession(): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return;
+  forgetSession();
+  await ensureSession();
 }
