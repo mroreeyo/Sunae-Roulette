@@ -286,7 +286,7 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 
 **출처 표시.** 식당 목록 화면 하단에 "식당 정보: 행정안전부 공공데이터"를 표시한다. 이용허락범위에 제한이 없더라도 데이터의 출처와 기준일을 사용자가 알 수 있게 한다.
 
-**배경 사진.** 위키미디어 공용의 [View from Sunae Overpass.jpg](https://commons.wikimedia.org/wiki/File:View_from_Sunae_Overpass.jpg)(작성자 Semtall, CC BY-SA 4.0)를 960px로 줄여 `apps/web/public/images/sunae-overpass.jpg`에 둔다. CC BY-SA 4.0 조건에 따라 홈 화면 하단에 제목·작성자·라이선스 링크와 변경 사항(크기 축소, 잔상 효과)을 표시한다. 사진을 바꾸면 이 표시도 함께 바꾼다.
+**배경 사진.** 위키미디어 공용의 [View from Sunae Overpass.jpg](https://commons.wikimedia.org/wiki/File:View_from_Sunae_Overpass.jpg)(작성자 Semtall, CC BY-SA 4.0)를 960px로 줄여 `apps/web/public/images/sunae-overpass.jpg`에 둔다. CC BY-SA 4.0 조건에 따라 설정 화면의 "데이터 출처"에 제목·작성자·라이선스 링크와 변경 사항(크기 축소, 잔상 효과)을 표시한다. 사진을 바꾸면 이 표시도 함께 바꾼다.
 
 **비기능 요구사항**
 
@@ -327,3 +327,4 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 - 2026-10-15: 식사 기록 수정과 직접 추가한 식당의 수정·삭제 구현. 기록 수정은 `place_id`만 바꾸고 `spin_count`·`decision_seconds`를 비워 지표에서 뺀다. 식당 목록 조회에 `source`·`created_by`를 더해 본인이 추가한 식당을 구분하고, RLS에 막혀 0건이 갱신되면 실패로 처리한다. 클라이언트 호출 표와 pgTAP·Playwright 테스트 범위를 보강했다.
 - 2026-10-15: 식당 목록 캐시에 `source`·`createdBy`가 더해져 영속화 캐시 버전(`CACHE_BUSTER`)을 `v2`로 올렸다. 배포 직후 첫 실행에서는 옛 캐시(대기 중이던 저장 포함)를 버리고 다시 받는다.
 - 2026-10-16: 운영에서 QR로 처음 들어온 iPhone Safari 사용자의 "여기 갈래"가 RLS에 막힌(401) 문제 수정. supabase-js는 요청마다 localStorage에서 세션을 읽고, 읽지 못하면 조용히 anon 키로 보낸다. 가입과 조회는 성공한 뒤 저장 요청만 anon으로 나간 로그와 맞는다. 인증 저장소를 localStorage + 메모리 사본으로 바꾸고(`lib/supabase.ts`), 저장 직전에 세션이 없으면 다시 로그인한다(`requireSession`). Safari가 세션을 읽지 못한 정확한 이유는 확인하지 못했다(확인 필요).
+- 2026-10-16: 홈 화면의 배경 사진 출처 표시를 없애고, 설정 화면 "데이터 출처"에 라이선스 링크와 변경 사항까지 모두 옮겼다(CC BY-SA 4.0 표시 의무 유지).

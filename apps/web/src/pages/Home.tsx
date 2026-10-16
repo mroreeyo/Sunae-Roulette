@@ -144,7 +144,7 @@ export default function Home() {
       </div>
 
       <header className="pt-2">
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">오늘 점심, 어디 갈까요?</h1>
+        <h1 className="text-[26px] leading-tight font-bold tracking-tight">수내에서 뭐먹을까?</h1>
         <p className="mt-1 text-[15px] text-ink-muted">
           {config.data ? `${config.data.baseName} 반경 ${config.data.radiusM}m` : '주변 식당을 불러오는 중'}
           {places.data ? ` · ${places.data.length}곳` : ''}
@@ -243,18 +243,6 @@ export default function Home() {
           {spinning ? '돌리는 중' : outcome.kind === 'result' ? '한 번 더 돌리기' : '돌리기'}
         </button>
       )}
-
-      <p className="text-[12px] leading-relaxed text-ink-muted">
-        배경 사진:{' '}
-        <a className="underline" href="https://commons.wikimedia.org/wiki/File:View_from_Sunae_Overpass.jpg" target="_blank" rel="noreferrer">
-          View from Sunae Overpass
-        </a>
-        , Semtall,{' '}
-        <a className="underline" href="https://creativecommons.org/licenses/by-sa/4.0/deed.ko" target="_blank" rel="noreferrer">
-          CC BY-SA 4.0
-        </a>
-        . 크기를 줄이고 잔상 효과를 더함.
-      </p>
     </div>
   );
 }

@@ -80,7 +80,11 @@ export default function Settings() {
             <a className="underline" href="https://commons.wikimedia.org/wiki/File:View_from_Sunae_Overpass.jpg" target="_blank" rel="noreferrer">
               View from Sunae Overpass
             </a>
-            , Semtall, CC BY-SA 4.0
+            , Semtall,{' '}
+            <a className="underline" href="https://creativecommons.org/licenses/by-sa/4.0/deed.ko" target="_blank" rel="noreferrer">
+              CC BY-SA 4.0
+            </a>
+            . 크기를 줄이고 잔상 효과를 더해 홈 화면 배경으로 써요.
           </li>
           <li>지도: 카카오맵, 네이버 지도로 연결만 해요. 지도 정보는 저장하지 않아요.</li>
         </ul>
