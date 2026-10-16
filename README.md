@@ -43,6 +43,12 @@
    pnpm dev
    ```
 
+6. 팀 투표 방을 쓰려면 다른 터미널에서 `create-room` Edge Function을 띄웁니다. `packages/core`를 함수 폴더로 복사한 뒤 실행합니다.
+
+   ```bash
+   pnpm functions:serve
+   ```
+
 로컬 인증 메일은 실제로 발송되지 않고 http://127.0.0.1:54324 (Mailpit)에 쌓입니다.
 
 ## 검사
@@ -56,7 +62,7 @@ pnpm test:e2e
 supabase test db
 ```
 
-`pnpm test:e2e`와 `supabase test db`는 로컬 Supabase가 떠 있고 식당 데이터를 넣은 상태에서 실행합니다. 첫 E2E 실행 전에는 브라우저를 한 번 설치합니다.
+`pnpm test:e2e`와 `supabase test db`는 로컬 Supabase가 떠 있고 식당 데이터를 넣은 상태에서 실행합니다. `pnpm test:e2e`의 팀 투표 테스트는 `pnpm functions:serve`도 떠 있어야 하고, 마감 확정을 pg_cron(1분 주기)으로 기다리므로 1분 남짓 걸립니다. 첫 E2E 실행 전에는 브라우저를 한 번 설치합니다.
 
 ```bash
 pnpm --filter @lunch/web exec playwright install chromium
@@ -64,7 +70,7 @@ pnpm --filter @lunch/web exec playwright install chromium
 
 ## 배포
 
-v1에는 Edge Function과 예약 작업이 없습니다. 클라우드 Supabase 프로젝트와 Vercel 프로젝트만 있으면 됩니다.
+클라우드 Supabase 프로젝트와 Vercel 프로젝트가 필요합니다. 팀 투표 방(v2)은 Edge Function 하나(`create-room`)와 pg_cron 작업 하나를 더 씁니다.
 
 ### 1. Supabase 클라우드 프로젝트
 
@@ -81,6 +87,14 @@ v1에는 Edge Function과 예약 작업이 없습니다. 클라우드 Supabase �
 
    ```bash
    supabase db push
+   ```
+
+   v2 마이그레이션이 pg_cron 확장을 켜고 `close-due-rooms` 작업(1분마다)과 Realtime 발행 대상을 등록합니다.
+
+   팀 투표 방의 Edge Function을 배포합니다.
+
+   ```bash
+   pnpm functions:deploy
    ```
 
 3. 대시보드 Authentication 설정을 맞춥니다. 로컬 `supabase/config.toml`은 클라우드에 자동으로 반영되지 않습니다.

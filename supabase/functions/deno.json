@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@lunch/core": "./_shared/core/index.ts"
+  }
+}

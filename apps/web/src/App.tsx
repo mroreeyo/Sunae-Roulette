@@ -1,9 +1,14 @@
+import { lazy, Suspense } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 import { useAuthSync } from './features/account/useAuthSync.ts';
 import History from './pages/History.tsx';
 import Home from './pages/Home.tsx';
 import Places from './pages/Places.tsx';
 import Settings from './pages/Settings.tsx';
+
+// Team rooms load on demand so the first screen stays within the bundle budget.
+const RoomNew = lazy(() => import('./pages/RoomNew.tsx'));
+const RoomVote = lazy(() => import('./pages/RoomVote.tsx'));
 
 const NAV_ITEMS = [
   { to: '/', label: '룰렛' },
@@ -22,6 +27,8 @@ export default function App() {
           <Route path="/places" element={<Places />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/rooms/new" element={<Suspense fallback={null}><RoomNew /></Suspense>} />
+          <Route path="/r/:code" element={<Suspense fallback={null}><RoomVote /></Suspense>} />
         </Routes>
       </main>
       <nav

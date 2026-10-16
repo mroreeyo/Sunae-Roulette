@@ -98,8 +98,9 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
     },
   },
   dehydrateOptions: {
-    // The session is re-checked on every start, so it is never restored from the cache.
-    shouldDehydrateQuery: (query) => query.state.status === 'success' && query.queryKey[0] !== queryKeys.session[0],
+    // The session is re-checked on every start, and team rooms are live, so neither is restored.
+    shouldDehydrateQuery: (query) =>
+      query.state.status === 'success' && query.queryKey[0] !== queryKeys.session[0] && query.queryKey[0] !== 'room',
     // Paused mutations, plus failed unwatched saves so their notice survives a reload.
     shouldDehydrateMutation: (mutation) => defaultShouldDehydrateMutation(mutation) || isFailedUnwatchedSave(mutation),
   },

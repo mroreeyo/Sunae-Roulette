@@ -217,7 +217,7 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 
 **추천 로직의 위치.** v1 추천은 브라우저에서 돈다. 후보가 수백 곳 수준이라 전부 받아와 계산해도 충분히 빠르다. 로직은 순수 함수 `recommend(places, meals, prefs, filters, rng)`로 `packages/core`에 두고, v2의 `create-room` 함수가 같은 코드를 가져다 쓴다. 난수 함수를 인자로 받아서 테스트에서 결과를 고정할 수 있다.
 
-**`packages/core`를 Deno에서 쓰기 위한 제약.** 외부 패키지에 의존하지 않는 순수 TypeScript로 작성하고, 상대 import에는 `.ts` 확장자를 붙인다(Vite 쪽은 `allowImportingTsExtensions`). Edge Function은 `supabase/functions/deno.json`의 import map으로 `packages/core`를 참조한다. 함수 디렉터리 밖의 파일이 배포 번들에 포함되는지는 v2 착수 전에 시험 배포로 확인한다 (확인 필요). 포함되지 않으면 빌드 단계에서 `packages/core`를 `supabase/functions/_shared/`로 복사한다.
+**`packages/core`를 Deno에서 쓰기 위한 제약.** 외부 패키지에 의존하지 않는 순수 TypeScript로 작성하고, 상대 import에는 `.ts` 확장자를 붙인다(Vite 쪽은 `allowImportingTsExtensions`). Edge Function은 함수 디렉터리 밖의 파일을 읽지 못한다(2026-10-16 로컬 Edge Runtime 1.69에서 `Module not found` 확인). 그래서 `pnpm functions:sync-core`(`scripts/sync-functions-core.mjs`)가 `packages/core/src`를 `supabase/functions/_shared/core/`로 복사하고(git 제외), `supabase/functions/deno.json`의 import map이 `@lunch/core`를 그 복사본으로 연결한다. `pnpm functions:serve`와 `pnpm functions:deploy`는 복사부터 한다.
 
 **클라이언트 직접 호출 (supabase-js)**
 
@@ -232,7 +232,8 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 | 식사 저장 | `from('meals').upsert({ place_id, eaten_on, spin_count, decision_seconds }, { onConflict: 'user_id,eaten_on' })` | 같은 날 다시 저장하면 교체 |
 | 식사 기록 수정 | `from('meals').update({ place_id, spin_count: null, decision_seconds: null }).eq('id', id).select('id')` | 식당만 바꾸고 날짜는 그대로 둔다(하루 1회 기록). 바꾼 기록은 룰렛 결과가 아니므로 지표 컬럼을 비운다. 0건이면 실패로 처리 |
 | 식사 기록 삭제 | `from('meals').delete().eq('id', id)` | 본인 행만(RLS) |
-| 방 입장 (v2) | `rpc('join_room', { code, nickname })` | 방·후보·입장자 반환. 코드로 방을 찾는 유일한 경로 |
+| 방 입장 (v2) | `rpc('join_room', { p_code, p_nickname })` | 방 id 반환. 코드로 방을 찾는 유일한 경로. 방·후보·입장자·투표는 그 id로 RLS 조회한다 |
+| 방 조회 (v2) | `from('rooms')`, `from('room_candidates').select('…, places(…)')`, `from('room_members')`, `from('votes')`를 `room_id`로 조회 | 입장자만 읽힌다 (`is_room_member`) |
 | 투표 (v2) | `from('votes').upsert({ room_id, candidate_id }, { onConflict: 'room_id,voter_id' })` | 마감 전만 허용 (RLS) |
 | 실시간 구독 (v2) | `channel('room:{id}')`에 `postgres_changes`를 `votes`·`room_members`(`room_id=eq.{id}`), `rooms`(`id=eq.{id}`)로 등록 | 득표 재집계, 입장자 목록, 확정 결과 표시 |
 
@@ -240,15 +241,16 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 
 | 함수 | 메서드 | 입력 → 출력 | 호출 주체 |
 | --- | --- | --- | --- |
-| `create-room` | POST | `{ preview: true, exclude_place_ids? }` → 후보 3곳 미리보기 / `{ place_ids, deadline_at? }` → `{ code, candidates }` | 진행자 |
+| `create-room` | POST | `{ preview: true, exclude_place_ids? }` → `{ candidates, deadline_at }`(후보 3곳 미리보기와 기본 마감) / `{ place_ids, nickname, deadline_at? }` → `{ room_id, code, deadline_at }` | 진행자 |
 
-`create-room`은 저장할 때 진행자를 `room_members`에 넣고, 후보마다 생성 시점의 `weight`를 기록한다. `deadline_at`을 생략하면 11:40으로 정하고, 11:30이 지났으면 현재 시각 + 10분으로 정한다. 후보 계산의 쿨다운은 진행자의 기록과 최근 30일 안에 진행자의 방에서 투표한 사람들의 기록을 합쳐서 쓴다.
+`create-room`은 저장할 때 진행자를 `nickname`으로 `room_members`에 넣고, 후보마다 생성 시점의 `weight`를 기록한다. `deadline_at`을 생략하면 11:40으로 정하고, 11:30이 지났으면 현재 시각 + 10분으로 정한다(`packages/core`의 `defaultRoomDeadline`). 직접 정하는 마감은 지금부터 12시간 안이어야 한다. 후보는 `pickRoomCandidates`가 한 곳씩 뽑으며, 아직 없는 카테고리를 고르되 그 때문에 쿨다운을 더 줄여야 하면 카테고리 중복을 택한다. 후보 계산의 쿨다운은 진행자의 기록과 최근 30일 안에 진행자의 방에서 투표한 사람들의 기록을 합쳐서 쓴다.
 
 **DB 함수 (v2)**
 
 | 함수 | 종류 | 동작 | 호출 주체 |
 | --- | --- | --- | --- |
-| `join_room(code, nickname)` | RPC, security definer | 코드로 열린 방을 찾아 `room_members`에 upsert하고 방·후보·입장자를 반환. 없는 코드는 같은 오류로 응답 | 투표 화면 |
+| `join_room(p_code, p_nickname)` | RPC, security definer | 코드(대소문자·공백 무시)로 방을 찾아 `room_members`에 upsert하고 방 id를 반환. 없는 코드와, 이미 마감된 방에 처음 들어오려는 경우는 같은 오류(`P0002`)로 응답한다. 이미 입장했던 사람은 마감 뒤에도 다시 들어와 결과를 본다 | 투표 화면 |
+| `is_room_open(room_id)` | security definer | 방이 열려 있고 마감 전인지 반환 | `votes` RLS 정책 |
 | `is_room_member(room_id)` | security definer | 본인이 방 입장자인지 반환. RLS 정책에서 `room_members`를 다시 조회하면 재귀가 생기므로 이 함수로 확인 | RLS 정책 |
 | `propose_candidate(room_id, place_id)` | RPC, security definer | 입장자이고 방이 열려 있으며 후보가 6곳 미만일 때 후보 추가 (`weight` 0) | 투표 화면 (F-11, P2) |
 | `close_due_rooms()` | SQL 함수 | 아래 확정 규칙 실행 | pg\_cron (1분마다) |
@@ -332,3 +334,4 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 - 2026-10-16: 카카오맵 링크도 가게 이름만으로 검색하게 바꿨다. 위치가 있는 식당에 바로 열던 길찾기(`link/to`)를 없애고, 버튼 이름을 "카카오맵"으로 바꿨다.
 - 2026-10-16: 지도 버튼에 브랜드 색(`#FEE500`, `#03C75A`)과 로고를 넣었다. 로고는 Simple Icons(CC0)의 SVG 경로를 인라인으로 넣어 의존성을 늘리지 않았고, 글자는 두 버튼 모두 `#191919`로 해 대비 기준(WCAG AA)을 맞췄다(흰 글자는 연두색 위 대비 2.3:1). 각 회사의 브랜드 사용 지침에 맞는지는 확인하지 않았다(확인 필요).
 - 2026-10-16: 지도 버튼 로고를 제거했다. 카카오 브랜드 보호 정책은 제3자의 브랜드 사용에 사전 승인을 요구하고, 네이버 브랜드 가이드는 공식 로고 파일을 변형 없이 쓰도록 하는데 Simple Icons의 N은 공식 파일이 아니다. 브랜드 색(`#FEE500`, `#03C75A`)과 서비스 이름 글자만 남겼다.
+- 2026-10-16: v2 팀 투표 방(F-08~F-10) 구현. `rooms`·`room_members`·`room_candidates`·`votes`와 RLS, `join_room`·`is_room_member`·`is_room_open`·`close_due_rooms`, pg_cron 1분 작업, Realtime 발행을 마이그레이션 `20261016000000_v2_rooms`로 추가했다. `create-room` Edge Function은 진행자 닉네임을 받고, `join_room`은 방 id만 돌려준다(나머지는 RLS 조회). Edge Function이 함수 디렉터리 밖을 읽지 못해 `packages/core`를 `_shared/core`로 복사하는 방식으로 확정했다. F-11(후보 추가 제안)과 `propose_candidate`는 이번 범위에서 뺐다. 방 데이터는 영속화 캐시에 남기지 않는다.

@@ -13,3 +13,5 @@ export { buildWheel, recommend } from './recommend.ts';
 export { mealStats } from './stats.ts';
 export type { CategoryShare, MealStats, PlaceCount } from './stats.ts';
 export type { Candidate, RecommendInput, RecommendResult } from './recommend.ts';
+export { defaultRoomDeadline, pickRoomCandidates, ROOM_CANDIDATE_COUNT } from './room.ts';
+export type { RoomCandidatesInput } from './room.ts';

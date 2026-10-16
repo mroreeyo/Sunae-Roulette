@@ -15,6 +15,8 @@ coverage/
 supabase/.branches/
 supabase/.temp/
 supabase/.env
+# copy of packages/core for Edge Functions (pnpm functions:sync-core)
+supabase/functions/_shared/core/
 
 # playwright
 test-results/

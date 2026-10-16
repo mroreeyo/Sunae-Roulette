@@ -41,7 +41,7 @@ flowchart LR
 lunch-roulette/
 ├─ apps/web/                 # React + Vite
 │  └─ src/
-│     ├─ pages/              # Home, Places, History, Settings, RoomNew, RoomVote
+│     ├─ pages/              # Home, Places, History, Settings, RoomNew(/rooms/new), RoomVote(/r/:code, 지연 로딩)
 │     ├─ features/
 │     │  ├─ account/         # AccountSection(이메일 연결·로그인), useAuthSync(사용자 전환 시 캐시 초기화)
 │     │  ├─ backdrop/        # SunaeBackdrop (three.js 잔상 배경, React.lazy로 별도 파일)
@@ -49,17 +49,18 @@ lunch-roulette/
 │     │  ├─ roulette/        # RouletteWheel, ResultCard, FilterBar
 │     │  ├─ places/          # AddPlaceForm, vocabulary.ts(카테고리·태그 어휘)
 │     │  ├─ ui/              # Chip (공용 토글 칩)
-│     │  └─ room/            # CandidateCard, VoteBar, useRoomRealtime (v2)
+│     │  └─ room/            # api.ts(미리보기·생성·입장·조회·투표·useRoomRealtime), time.ts(마감 표시·카운트다운) (v2)
 │     ├─ pages/History.tsx   # 기록 목록 + 30일 통계(core mealStats)
 │     ├─ stores/             # filterStore(localStorage에 기억), rouletteSessionStore (Zustand)
 │     ├─ lib/                # supabase.ts, queryClient.ts(영속화 설정), mapLinks.ts(카카오·네이버 링크)
 │     └─ App.tsx
-├─ packages/core/            # recommend.ts, cooldown.ts(영업일), weights.ts, geo.ts(거리·도보 시간) + 테스트
+├─ packages/core/            # recommend.ts, cooldown.ts(영업일), weights.ts, geo.ts(거리·도보 시간), room.ts(방 후보·기본 마감) + 테스트
 ├─ scripts/import-places/    # 공공데이터 CSV → places (좌표 변환, 업태 매핑) + 테스트
 └─ supabase/
    ├─ migrations/            # 테이블, RLS, RPC(join_room 등), pg_cron SQL
    └─ functions/             # (v2)
-      ├─ deno.json           # packages/core import map
+      ├─ deno.json           # @lunch/core → _shared/core
+      ├─ _shared/core/       # packages/core 복사본 (pnpm functions:sync-core, git 제외)
       └─ create-room
 ```
 
@@ -116,7 +117,7 @@ sequenceDiagram
 1. `main` 브랜치에 푸시하면 Vercel이 `apps/web`을 빌드해 배포한다. PR마다 프리뷰 URL이 생긴다.
 2. DB 변경은 `supabase/migrations`에 SQL로 남기고 `supabase db push`로 반영한다. `app_config` 초기값과 v2의 `pg_cron` 확장 활성화도 마이그레이션에 포함한다.
 3. 식당 목록은 공공데이터포털에서 CSV를 내려받아 `pnpm import:places <파일 절대 경로>`로 넣는다(스크립트가 자기 패키지 폴더에서 실행되므로 절대 경로를 쓴다). 로컬 DB와 클라우드 DB 중 대상은 스크립트의 환경 변수로 정한다.
-4. (v2) Edge Function은 `supabase functions deploy create-room`으로 배포한다. v2 착수 전에 `packages/core`가 번들에 포함되는지 시험 배포로 확인한다.
+4. (v2) Edge Function은 `pnpm functions:deploy`로 배포한다. 함수 디렉터리 밖의 `packages/core`는 읽히지 않아서, 이 명령이 먼저 `_shared/core`로 복사한 뒤 `supabase functions deploy create-room`을 실행한다.
 5. 로컬 개발은 `supabase start`로 Postgres·Auth·Realtime을 도커에 띄우고 `pnpm dev`로 앱을 실행한다.
 
 **환경 변수**
@@ -145,3 +146,4 @@ sequenceDiagram
 - 2026-10-14: TRD 개정에 맞춰 갱신. `close-room` 함수를 `close_due_rooms()` SQL 함수로 대체, `join_room` 입장 단계 추가, Realtime 구독 대상 확대, 기준 위치를 `app_config`로 이동, `packages/core`의 Deno 호환 제약, Vault 키, 오프라인 영속화 반영.
 - 2026-10-14: 거리 계산(`geo.ts`)을 `apps/web/src/lib`에서 `packages/core`로 이동. 필터 판정과 v2 `create-room`이 같은 계산을 쓰기 때문이다.
 - 2026-10-14: 식당 데이터 출처를 공공데이터로 변경. 카카오 로컬 API, `sync-places`·`search-place`, pg\_net, Vault 키를 제거하고 가져오기 스크립트(`scripts/import-places`)를 추가. 지도는 카카오맵·네이버 지도 링크(`lib/mapLinks.ts`)로만 연결한다.
+- 2026-10-16: v2 팀 투표 방 구현에 맞춰 저장소 구조를 갱신했다(`features/room/api.ts`, `packages/core/src/room.ts`, `supabase/functions/_shared/core` 복사 방식, `pnpm functions:deploy`).

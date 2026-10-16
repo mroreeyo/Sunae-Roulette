@@ -1,6 +1,7 @@
 import { buildWheel, recommend, toSeoulDate, type Candidate } from '@lunch/core';
 import { useReducedMotion } from 'motion/react';
 import { lazy, Suspense, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import type { BackdropMode } from '../features/backdrop/SunaeBackdrop.tsx';
 import {
   useAppConfig,
@@ -243,6 +244,13 @@ export default function Home() {
           {spinning ? '돌리는 중' : outcome.kind === 'result' ? '한 번 더 돌리기' : '돌리기'}
         </button>
       )}
+
+      <Link
+        to="/rooms/new"
+        className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-surface px-6 text-[15px] font-semibold text-ink ring-1 ring-line transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        팀이랑 투표로 정하기
+      </Link>
     </div>
   );
 }

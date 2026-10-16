@@ -11,7 +11,10 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @lunch/web test:e2e",
     "import:places": "pnpm --filter @lunch/import-places run import:places",
-    "import:places:cloud": "pnpm --filter @lunch/import-places run import:places:cloud"
+    "import:places:cloud": "pnpm --filter @lunch/import-places run import:places:cloud",
+    "functions:sync-core": "node scripts/sync-functions-core.mjs",
+    "functions:serve": "pnpm functions:sync-core && supabase functions serve",
+    "functions:deploy": "pnpm functions:sync-core && supabase functions deploy create-room"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
