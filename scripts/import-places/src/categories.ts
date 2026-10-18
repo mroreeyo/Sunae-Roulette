@@ -51,13 +51,27 @@ const EXCLUDED_BUSINESS_TYPES: ReadonlySet<string> = new Set([
  * so the business name is checked as well.
  */
 const CAFE_NAME =
-  /커피|카페|cafe|coffee|에스프레소|espresso|디저트|베이커리|베이킹|제과|젤라또|아이스크림|요거트|빙수|호두|배스킨|베스킨|스타벅스|투썸|이디야|빽다방|컴포즈|메가엠지씨|할리스|폴바셋|공차|바나프레소/i;
+  /커피|카페|cafe|coffee|에스프레소|espresso|디저트|베이커리|베이킹|제과|젤라또|아이스크림|요거트|빙수|호두|배스킨|베스킨|스타벅스|투썸|이디야|빽다방|컴포즈|메가엠지씨|할리스|폴바셋|공차|바나프레소|설빙/i;
 
 /**
  * Venues licensed to sell food but not lunch places: PC rooms, poker pubs, bars.
- * Found in the 2026-10 성남시 data under 기타.
+ * Found in the 2026-10 성남시 data under 기타 and 한식.
  */
-const NON_LUNCH_NAME = /pc방|피씨|pc-|홀덤|펍|pub|비어|beer|와인|wine|술바|혼술|노래|당구|볼링|스크린/i;
+const NON_LUNCH_NAME =
+  /pc방|피씨|pc-|홀덤|펍|pub|비어|beer|맥주|와인|wine|술바|혼술|술집|포차|노래|당구|볼링|스크린/i;
+
+/**
+ * Convenience store chains. Most are licensed as 편의점, but some branches are
+ * registered as 패스트푸드, 일반조리판매 or 기타 휴게음식점.
+ */
+const CONVENIENCE_STORE_NAME =
+  /세븐\s?일레븐|7-?eleven|코리아세븐|gs\s?25|지에스\s?25|\bcu\b|씨유|이마트\s?24|emart\s?24|미니스톱|ministop/i;
+
+/**
+ * Snack shops registered under a generic type such as 일반조리판매.
+ * Only used when the business type alone would give 기타.
+ */
+const SNACK_NAME = /떡볶이|김밥|분식|만두|오뎅|어묵/;
 
 export const DEFAULT_CATEGORY = '기타';
 
@@ -65,8 +79,12 @@ export const DEFAULT_CATEGORY = '기타';
 export function toCategory(businessType: string, name: string): string | null {
   const type = businessType.trim();
   if (EXCLUDED_BUSINESS_TYPES.has(type)) return null;
-  if (CAFE_NAME.test(name) || NON_LUNCH_NAME.test(name)) return null;
-  return CATEGORY_BY_BUSINESS_TYPE[type] ?? DEFAULT_CATEGORY;
+  if (CAFE_NAME.test(name) || NON_LUNCH_NAME.test(name) || CONVENIENCE_STORE_NAME.test(name)) {
+    return null;
+  }
+  const category = CATEGORY_BY_BUSINESS_TYPE[type] ?? DEFAULT_CATEGORY;
+  if (category === DEFAULT_CATEGORY && SNACK_NAME.test(name)) return '분식';
+  return category;
 }
 
 export function isKnownBusinessType(businessType: string): boolean {
