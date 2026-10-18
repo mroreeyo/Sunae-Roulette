@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 import { useAuthSync } from './features/account/useAuthSync.ts';
+import { RouteErrorBoundary } from './features/ui/RouteErrorBoundary.tsx';
 import History from './pages/History.tsx';
 import Home from './pages/Home.tsx';
 import Places from './pages/Places.tsx';
@@ -27,8 +28,8 @@ export default function App() {
           <Route path="/places" element={<Places />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/rooms/new" element={<Suspense fallback={null}><RoomNew /></Suspense>} />
-          <Route path="/r/:code" element={<Suspense fallback={null}><RoomVote /></Suspense>} />
+          <Route path="/rooms/new" element={<RouteErrorBoundary><Suspense fallback={null}><RoomNew /></Suspense></RouteErrorBoundary>} />
+          <Route path="/r/:code" element={<RouteErrorBoundary><Suspense fallback={null}><RoomVote /></Suspense></RouteErrorBoundary>} />
         </Routes>
       </main>
       <nav

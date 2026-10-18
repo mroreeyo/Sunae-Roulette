@@ -320,6 +320,7 @@ export function useSetPref() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async ({ placeId, patch }: { placeId: string; patch: PrefPatch }) => {
+      await requireSession();
       const current = client.getQueryData<PlacePref[]>(queryKeys.prefs)?.find((p) => p.placeId === placeId);
       const next = { ...(current ?? emptyPref(placeId)), ...patch };
       const { error } = await supabase.from('user_place_prefs').upsert(
@@ -356,6 +357,8 @@ export function useAddPlace() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async ({ name, category, address }: NewPlaceInput) => {
+      // A tap right after the page opened could otherwise go out before sign-in finished, as anon.
+      await requireSession();
       const { error } = await supabase.from('places').insert({ source: 'manual', name, category, address });
       if (error) throw error;
     },
@@ -365,6 +368,7 @@ export function useAddPlace() {
 
 /** Updates a manual place the signed-in user added. RLS rejects every other row. */
 async function updateOwnPlace(placeId: string, patch: Record<string, unknown>): Promise<void> {
+  await requireSession();
   const { data, error } = await supabase.from('places').update(patch).eq('id', placeId).select('id');
   if (error) throw error;
   // RLS skips rows the user may not edit instead of raising, so nothing comes back.
@@ -413,6 +417,7 @@ export function useDeleteMeal() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (mealId: string) => {
+      await requireSession();
       const { error } = await supabase.from('meals').delete().eq('id', mealId);
       if (error) throw error;
     },
@@ -424,6 +429,7 @@ export function useChangeMealPlace() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async ({ mealId, placeId }: { mealId: string; placeId: string }) => {
+      await requireSession();
       // A corrected meal is no longer the roulette's pick, so it drops out of the
       // decision metrics like a team meal does (PRD success metrics).
       const { data, error } = await supabase

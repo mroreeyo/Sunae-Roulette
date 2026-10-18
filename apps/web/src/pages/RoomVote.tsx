@@ -5,6 +5,7 @@ import { useAppConfig, useSession } from '../features/data/queries.ts';
 import {
   readNickname,
   rememberNickname,
+  ROOM_NOT_FOUND,
   useJoinRoom,
   useRoom,
   useRoomRealtime,
@@ -24,30 +25,48 @@ const mapButton =
   'inline-flex min-h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold text-on-brand transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 function joinErrorText(error: Error): string {
-  return error.message === 'room not found'
+  return error.message === ROOM_NOT_FOUND
     ? '방을 찾을 수 없어요. 링크가 맞는지, 이미 마감된 방은 아닌지 확인해 주세요.'
-    : `입장하지 못했어요. (${error.message})`;
+    : `입장하지 못했어요. ${error.message}`;
 }
 
-export default function RoomVote() {
+/** A new code starts from scratch, so a room never shows under another room's link. */
+export default function RoomVoteRoute() {
   const { code = '' } = useParams();
+  return <RoomVote key={code} code={code} />;
+}
+
+interface Joined {
+  roomId: string;
+  userId: string | null;
+}
+
+function RoomVote({ code }: { code: string }) {
   const session = useSession();
   const join = useJoinRoom();
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [joined, setJoined] = useState<Joined | null>(null);
   // Someone who already has a nickname on this device goes straight in (also the host, who joined
   // when making the room).
   const [savedNickname] = useState(readNickname);
   const { isIdle, mutate } = join;
 
   useEffect(() => {
-    if (session.isSuccess && savedNickname && isIdle) mutate({ code, nickname: savedNickname }, { onSuccess: setRoomId });
+    if (session.isSuccess && savedNickname && isIdle) mutate({ code, nickname: savedNickname }, { onSuccess: setJoined });
   }, [session.isSuccess, savedNickname, isIdle, mutate, code]);
 
-  if (roomId) return <RoomView roomId={roomId} myId={session.data?.id ?? null} />;
-  if (join.isPending || (savedNickname && join.isIdle)) {
+  // After an email login switches the user, the room was joined as someone else: join again.
+  const sameUser = !joined || !session.data || joined.userId === session.data.id;
+  if (joined && sameUser) return <RoomView roomId={joined.roomId} myId={joined.userId} />;
+  // Without a session (sign-in failed) the form is shown, and joining signs in again.
+  if (join.isPending || (savedNickname && join.isIdle && !session.isError)) {
     return (
       <div className="flex flex-col gap-3 pt-2" aria-label="불러오는 중">
         <div className="h-8 w-40 animate-pulse rounded-full bg-surface-2" />
+        {join.isPaused && (
+          <p role="status" className="text-[15px] text-ink-muted">
+            지금은 오프라인이에요. 연결되면 바로 입장할게요.
+          </p>
+        )}
         <div className="h-[220px] animate-pulse rounded-3xl bg-surface-2" />
       </div>
     );
@@ -57,7 +76,7 @@ export default function RoomVote() {
       error={join.error}
       onJoin={(nickname) => {
         rememberNickname(nickname);
-        join.mutate({ code, nickname }, { onSuccess: setRoomId });
+        join.mutate({ code, nickname }, { onSuccess: setJoined });
       }}
     />
   );
@@ -152,11 +171,21 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
     <div className="flex flex-col gap-5 pb-4">
       <header className="pt-2">
         <h1 className="text-[26px] leading-tight font-bold tracking-tight">오늘 점심 투표</h1>
-        <p className="mt-1 text-[15px] text-ink-muted" aria-live="polite">
+        <p className="mt-1 text-[15px] text-ink-muted">
           {room.status === 'closed'
             ? '투표가 끝났어요.'
             : votingOpen
               ? `${seoulTime(room.deadlineAt)} 마감 · ${formatRemaining(remaining)} 남음`
+              : '투표를 마감했어요. 결과를 정리하는 중이에요.'}
+        </p>
+        {/* The countdown above ticks every second, so only the phase changes are announced. */}
+        <p role="status" className="sr-only">
+          {room.status === 'closed'
+            ? winner
+              ? `투표가 끝났어요. 결과는 ${winner.name}입니다.`
+              : '투표가 끝났어요. 정해진 곳이 없어요.'
+            : votingOpen
+              ? ''
               : '투표를 마감했어요. 결과를 정리하는 중이에요.'}
         </p>
       </header>
@@ -197,7 +226,7 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
                   <button
                     type="button"
                     aria-pressed={mine}
-                    aria-label={`${c.name}에 투표`}
+                    aria-label={`${c.name} ${mine ? '내가 고른 곳' : '여기 투표'}`}
                     disabled={vote.isPending}
                     onClick={() => vote.mutate(c.id)}
                     className={`mt-3 min-h-11 w-full rounded-full text-[15px] font-semibold ring-1 transition-[transform,background-color] duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 ${
@@ -213,7 +242,7 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
         </ol>
         {vote.isError && (
           <p role="alert" className="text-[14px] text-accent-ink">
-            투표하지 못했어요. 마감 시각이 지났는지 확인해 주세요. ({vote.error.message})
+            투표하지 못했어요. {vote.error.message}
           </p>
         )}
       </section>
@@ -305,7 +334,9 @@ function Result({ winner, voted, minutes }: { winner: RoomCandidate | null; vote
           {winner.category} · {minutes === null ? '도보 시간 알 수 없음' : `걸어서 약 ${Math.max(1, Math.round(minutes))}분`}
         </p>
         <p className="mt-3 text-[14px] text-ink-muted">
-          {voted ? '투표한 사람의 오늘 식사 기록에 남았어요.' : '투표하지 않아서 내 식사 기록에는 남지 않았어요.'}
+          {voted
+            ? '투표한 사람의 식사 기록에 남았어요. 그날 이미 기록이 있었다면 그 기록을 그대로 둬요.'
+            : '투표하지 않아서 내 식사 기록에는 남지 않았어요.'}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <a className={`${mapButton} bg-kakao`} href={kakaoMapUrl(winner)} target="_blank" rel="noreferrer">

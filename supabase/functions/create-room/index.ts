@@ -28,6 +28,9 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
 /** A custom deadline must leave time to vote and still be today-ish. */
 const MAX_DEADLINE_MS = 12 * 60 * 60 * 1000;
+/** Rooms one person may make in a short window, so an anonymous user cannot flood the table. */
+const ROOM_LIMIT = 5;
+const ROOM_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 type Json = Record<string, unknown>;
 
@@ -41,9 +44,16 @@ function json(body: Json, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
 }
 
+/** Uniform over the alphabet: bytes past the last full multiple of its length are drawn again. */
 function newCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
-  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  const limit = 256 - (256 % CODE_ALPHABET.length);
+  let code = '';
+  while (code.length < CODE_LENGTH) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(CODE_LENGTH))) {
+      if (byte < limit && code.length < CODE_LENGTH) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+    }
+  }
+  return code;
 }
 
 function check<T>(result: { data: T; error: { message: string } | null }): T {
@@ -148,6 +158,14 @@ async function create(admin: SupabaseClient, hostId: string, body: Json): Promis
   }
   const deadline = parseDeadline(body.deadline_at);
 
+  const recent = await admin
+    .from('rooms')
+    .select('id', { count: 'exact', head: true })
+    .eq('host_id', hostId)
+    .gte('created_at', new Date(Date.now() - ROOM_LIMIT_WINDOW_MS).toISOString());
+  if (recent.error) throw new Error(recent.error.message);
+  if ((recent.count ?? 0) >= ROOM_LIMIT) throw new HttpError(429, 'too many rooms, try again later');
+
   const ctx = await loadContext(admin, hostId);
   const byId = new Map(ctx.places.map((p) => [p.id, p]));
   const chosen = placeIds.map((id) => byId.get(id));
@@ -181,7 +199,9 @@ async function create(admin: SupabaseClient, hostId: string, body: Json): Promis
       ),
     );
   } catch (error) {
-    await admin.from('rooms').delete().eq('id', room.id);
+    // Members and candidates go with the room (on delete cascade).
+    const cleanup = await admin.from('rooms').delete().eq('id', room.id);
+    if (cleanup.error) console.error(`could not remove half-made room ${room.id}`, cleanup.error);
     throw error;
   }
   return { room_id: room.id, code: room.code, deadline_at: deadline.toISOString() };

@@ -89,7 +89,8 @@ test('the meal editor points to adding a place when nothing matches', async ({ p
 });
 
 test('only the person who added a place can edit or delete it, and its meals stay', async ({ page, browser }) => {
-  const name = `e2e 국수집 ${Date.now()}`;
+  // Unique even when copies of this test run in parallel within the same millisecond.
+  const name = `e2e 국수집 ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const renamed = `${name} 2호점`;
 
   await page.goto('/places');

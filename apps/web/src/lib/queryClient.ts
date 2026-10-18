@@ -102,7 +102,9 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
     shouldDehydrateQuery: (query) =>
       query.state.status === 'success' && query.queryKey[0] !== queryKeys.session[0] && query.queryKey[0] !== 'room',
     // Paused mutations, plus failed unwatched saves so their notice survives a reload.
-    shouldDehydrateMutation: (mutation) => defaultShouldDehydrateMutation(mutation) || isFailedUnwatchedSave(mutation),
+    // Team room mutations are left out: they only make sense on the screen that started them.
+    shouldDehydrateMutation: (mutation) =>
+      mutation.options.mutationKey?.[0] !== 'room' && (defaultShouldDehydrateMutation(mutation) || isFailedUnwatchedSave(mutation)),
   },
 };
 

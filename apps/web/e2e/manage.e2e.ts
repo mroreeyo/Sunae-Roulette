@@ -33,8 +33,11 @@ test('favorite and hidden flags are saved per user', async ({ page }) => {
   const first = page.getByRole('listitem').first();
   const name = await first.locator('p').first().innerText();
 
-  await first.getByRole('button', { name: '즐겨찾기' }).click();
-  await first.getByRole('button', { name: '숨기기' }).click();
+  // Reload only once both saves reached the server; under load a reload could cut the second one off.
+  const saved = (response: { url(): string; request(): { method(): string } }) =>
+    response.url().includes('/rest/v1/user_place_prefs') && response.request().method() === 'POST';
+  await Promise.all([page.waitForResponse(saved), first.getByRole('button', { name: '즐겨찾기' }).click()]);
+  await Promise.all([page.waitForResponse(saved), first.getByRole('button', { name: '숨기기' }).click()]);
   await page.reload();
 
   const row = page.getByRole('listitem').filter({ hasText: name.replace(/숨김$/, '').trim() });

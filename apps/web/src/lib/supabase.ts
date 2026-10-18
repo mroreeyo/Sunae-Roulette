@@ -66,8 +66,12 @@ export function forgetSession(): void {
  * a write go out as anon and fail RLS.
  */
 export async function requireSession(): Promise<void> {
-  const { data } = await supabase.auth.getSession();
-  if (data.session) return;
+  if ((await supabase.auth.getSession()).data.session) return;
+  // A first-visit sign-in may still be running; signing in again would make a second user.
+  if (pending) {
+    await pending.catch(() => undefined);
+    if ((await supabase.auth.getSession()).data.session) return;
+  }
   forgetSession();
   await ensureSession();
 }

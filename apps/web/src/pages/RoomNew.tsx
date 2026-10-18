@@ -1,19 +1,13 @@
-import { toSeoulDate } from '@lunch/core';
 import { useId, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { fetchPreview, readNickname, rememberNickname, useCreateRoom, useRoomPreview, type PreviewCandidate } from '../features/room/api.ts';
-import { seoulTime } from '../features/room/time.ts';
+import { deadlineFromTime, seoulTime } from '../features/room/time.ts';
 import { fieldClass } from '../features/ui/field.ts';
 
 const MAX_NICKNAME = 20;
 
 const primaryButton =
   'inline-flex min-h-14 w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-bold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
-
-/** "11:40" in Seoul today, as an ISO instant. */
-function deadlineFromTime(time: string): string {
-  return new Date(`${toSeoulDate(new Date())}T${time}:00+09:00`).toISOString();
-}
 
 export default function RoomNew() {
   const ids = { nickname: useId(), deadline: useId(), error: useId() };
@@ -50,7 +44,7 @@ export default function RoomNew() {
       setSwappedOut((list) => [...list, out.placeId]);
       setPicked(candidates.map((c, i) => (i === index ? replacement : c)));
     } catch (error) {
-      setSwapError(`다른 식당을 불러오지 못했어요. (${(error as Error).message})`);
+      setSwapError(`다른 식당을 불러오지 못했어요. ${(error as Error).message}`);
     } finally {
       setSwapping(null);
     }
@@ -62,7 +56,7 @@ export default function RoomNew() {
     if (!name) return setFormError('닉네임을 입력해 주세요.');
     if (!candidates?.length) return setFormError('후보가 없어서 방을 만들 수 없어요.');
     const deadlineAt = deadlineFromTime(deadline);
-    if (new Date(deadlineAt).getTime() <= Date.now()) return setFormError('마감 시각이 이미 지났어요. 더 늦은 시각을 골라 주세요.');
+    if (!deadlineAt) return setFormError('마감 시각은 지금부터 12시간 안으로 골라 주세요.');
     setFormError(null);
     rememberNickname(name);
     createRoom.mutate(
@@ -166,12 +160,14 @@ export default function RoomNew() {
             className={fieldClass}
             required
           />
-          <p className="text-[13px] text-ink-muted">마감이 되면 가장 많이 받은 곳으로 자동 확정돼요.</p>
+          <p className={`text-[13px] ${deadline || !preview.data ? 'text-ink-muted' : 'text-accent-ink'}`}>
+            {deadline || !preview.data ? '마감이 되면 가장 많이 받은 곳으로 자동 확정돼요.' : '마감 시각을 골라 주세요.'}
+          </p>
         </div>
 
         {(formError || createRoom.isError) && (
           <p id={ids.error} role="alert" className="text-[14px] text-accent-ink">
-            {formError ?? `방을 만들지 못했어요. (${createRoom.error?.message})`}
+            {formError ?? `방을 만들지 못했어요. ${createRoom.error?.message ?? ''}`}
           </p>
         )}
 

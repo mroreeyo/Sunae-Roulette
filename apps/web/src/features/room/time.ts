@@ -1,3 +1,4 @@
+import { toSeoulDate } from '@lunch/core';
 import { useEffect, useState } from 'react';
 
 const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -24,4 +25,19 @@ export function useNow(active = true): number {
     return () => window.clearInterval(timer);
   }, [active]);
   return now;
+}
+
+/** create-room accepts deadlines up to this far ahead. */
+export const MAX_DEADLINE_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * The next time the Seoul clock shows `time` ("11:40"): today if that is still ahead, otherwise
+ * tomorrow (a room made at 23:55 closes at 00:05). Null when that is more than 12 hours away,
+ * which also covers picking a time that has already passed today.
+ */
+export function deadlineFromTime(time: string, now = new Date()): string | null {
+  const today = new Date(`${toSeoulDate(now)}T${time}:00+09:00`);
+  if (Number.isNaN(today.getTime())) return null;
+  const next = today.getTime() > now.getTime() ? today.getTime() : today.getTime() + 24 * 60 * 60 * 1000;
+  return next - now.getTime() <= MAX_DEADLINE_MS ? new Date(next).toISOString() : null;
 }

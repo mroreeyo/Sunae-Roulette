@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(30);
 
 -- Fixtures (as the migration owner, bypassing RLS) ---------------------------
 -- A hosts room 1, B joins it, C is an outsider who hosts room 2, D arrives after closing.
@@ -97,6 +97,14 @@ select throws_ok(
   '23503', null,
   'a vote cannot point at another room''s candidate'
 );
+select lives_ok($$ select public.join_room('HJKMNPQR', '비') $$, 'B also joins room 2');
+select throws_ok(
+  $$ update public.votes
+     set room_id = '30000000-0000-0000-0000-000000000002', candidate_id = '40000000-0000-0000-0000-000000000004'
+     where voter_id = '00000000-0000-0000-0000-0000000000b1' and room_id = '30000000-0000-0000-0000-000000000001' $$,
+  '42501', null,
+  'a vote cannot be moved into another room'
+);
 select throws_ok(
   $$ insert into public.rooms (code, host_id, deadline_at) values ('BBBBBBBB', '00000000-0000-0000-0000-0000000000b1', now()) $$,
   '42501', null,
@@ -119,15 +127,27 @@ values ('00000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-0000000
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
-select throws_ok(
-  $$ update public.votes set candidate_id = '40000000-0000-0000-0000-000000000002' where voter_id = '00000000-0000-0000-0000-0000000000b1' $$,
-  '42501', null,
+select is_empty(
+  $$ update public.votes set candidate_id = '40000000-0000-0000-0000-000000000002'
+     where voter_id = '00000000-0000-0000-0000-0000000000b1' and room_id = '30000000-0000-0000-0000-000000000001'
+     returning candidate_id $$,
   'votes cannot change after the deadline'
 );
+select throws_ok(
+  $$ insert into public.votes (room_id, candidate_id) values ('30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000002')
+     on conflict (room_id, voter_id) do update set candidate_id = excluded.candidate_id $$,
+  '42501', null,
+  'voting again through upsert is refused after the deadline'
+);
+
+-- Room 3 is past its deadline but the closing job has not run yet.
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+select throws_ok($$ select public.join_room('STUVWXYZ', '디') $$, 'P0002', null, 'no newcomers once the deadline has passed');
 
 -- Closing (as the pg_cron job does) -----------------------------------------
+-- Other rooms in the local database may be due too, so only this test's rooms are checked.
 reset role;
-select is(public.close_due_rooms(), 2, 'close_due_rooms closes every room past its deadline');
+select lives_ok($$ select public.close_due_rooms() $$, 'close_due_rooms runs');
 select results_eq(
   $$ select status, winner_place_id from public.rooms where id = '30000000-0000-0000-0000-000000000001' $$,
   $$ values ('closed', '20000000-0000-0000-0000-000000000002'::uuid) $$,
@@ -153,6 +173,19 @@ select results_eq(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
 select throws_ok($$ select public.join_room('ABCDEFGH', '디') $$, 'P0002', null, 'a closed room cannot be joined by someone new');
+
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select is(
+  public.join_room('ABCDEFGH', '새이름'),
+  '30000000-0000-0000-0000-000000000001'::uuid,
+  'a member can come back to a closed room to see the result'
+);
+select is(
+  (select nickname from public.room_members
+   where room_id = '30000000-0000-0000-0000-000000000001' and user_id = '00000000-0000-0000-0000-0000000000b1'),
+  '비',
+  'coming back does not change the nickname a closed room showed'
+);
 
 select * from finish();
 rollback;

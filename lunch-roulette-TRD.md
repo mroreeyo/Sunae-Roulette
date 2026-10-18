@@ -280,7 +280,7 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 | `user_place_prefs`, `meals`, `profiles` | 본인 행만 (`user_id = auth.uid()`) | 본인 행만. upsert를 쓰므로 insert와 update 정책을 모두 둔다 |
 | `import_logs` | 없음 (대시보드에서 확인) | service role만 |
 | `rooms`, `room_candidates`, `room_members` | `is_room_member(room_id)`가 참일 때 | 직접 쓰기 금지. `create-room`, `join_room`, `propose_candidate`로만 |
-| `votes` | `is_room_member(room_id)`가 참일 때 | 본인 `voter_id`이고, `rooms.status='open'`이며 `deadline_at > now()`일 때만 (insert·update) |
+| `votes` | `is_room_member(room_id)`가 참일 때 | 본인 `voter_id`이고, `rooms.status='open'`이며 `deadline_at > now()`일 때만 (insert·update). 수정은 기존 행의 방도 열려 있어야 하고, 트리거가 `room_id`·`voter_id` 변경을 막아 후보만 바꿀 수 있다 |
 
 방 코드 일치 여부는 RLS가 확인할 수 없다. 그래서 `rooms`를 코드로 직접 조회하지 못하게 막고, `join_room`으로 입장한 사람만 방을 읽게 한다. Realtime의 Postgres Changes도 이 읽기 정책을 따르므로 입장자에게만 변경이 전달된다. `votes`, `rooms`, `room_members`는 `supabase_realtime` publication에 추가한다.
 
@@ -335,3 +335,5 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 - 2026-10-16: 지도 버튼에 브랜드 색(`#FEE500`, `#03C75A`)과 로고를 넣었다. 로고는 Simple Icons(CC0)의 SVG 경로를 인라인으로 넣어 의존성을 늘리지 않았고, 글자는 두 버튼 모두 `#191919`로 해 대비 기준(WCAG AA)을 맞췄다(흰 글자는 연두색 위 대비 2.3:1). 각 회사의 브랜드 사용 지침에 맞는지는 확인하지 않았다(확인 필요).
 - 2026-10-16: 지도 버튼 로고를 제거했다. 카카오 브랜드 보호 정책은 제3자의 브랜드 사용에 사전 승인을 요구하고, 네이버 브랜드 가이드는 공식 로고 파일을 변형 없이 쓰도록 하는데 Simple Icons의 N은 공식 파일이 아니다. 브랜드 색(`#FEE500`, `#03C75A`)과 서비스 이름 글자만 남겼다.
 - 2026-10-16: v2 팀 투표 방(F-08~F-10) 구현. `rooms`·`room_members`·`room_candidates`·`votes`와 RLS, `join_room`·`is_room_member`·`is_room_open`·`close_due_rooms`, pg_cron 1분 작업, Realtime 발행을 마이그레이션 `20261016000000_v2_rooms`로 추가했다. `create-room` Edge Function은 진행자 닉네임을 받고, `join_room`은 방 id만 돌려준다(나머지는 RLS 조회). Edge Function이 함수 디렉터리 밖을 읽지 못해 `packages/core`를 `_shared/core`로 복사하는 방식으로 확정했다. F-11(후보 추가 제안)과 `propose_candidate`는 이번 범위에서 뺐다. 방 데이터는 영속화 캐시에 남기지 않는다.
+- 2026-10-18: v2 검토 반영. 투표 수정이 기존 행의 방 상태를 확인하지 않아 마감된 방의 표를 다른 방으로 옮길 수 있던 문제를 막았다(UPDATE 정책 `using`에 `is_room_open`, `room_id`·`voter_id` 변경 금지 트리거). `join_room`은 마감 시각이 지나면 확정 전이라도 새 사람을 받지 않고, 마감된 방에 다시 들어온 멤버의 닉네임은 바꾸지 않는다(마이그레이션 `20261018000000_v2_rooms_hardening`). `create-room`은 한 사람당 10분에 방 5개로 제한하고, 방 코드를 편향 없이 뽑는다. 화면은 Realtime 구독이 연결될 때와 화면으로 돌아올 때 다시 조회하고, 마감 시각 직후부터 확정될 때까지 5초마다 조회한다. 마감 시각 입력은 자정을 넘기면 다음 날로 해석하고 12시간 제한을 화면에서도 검사한다. 서버 오류는 한국어 문구로 바꿔 보여 주고, 방 관련 mutation은 영속화하지 않는다. 남은 과제: 방 생성의 단일 트랜잭션화, 마감 직전 투표와 확정 처리의 직렬화, 1,000곳을 넘는 식당 조회(확인 필요).
+- 2026-10-18: 모든 쓰기 요청(식사 저장·수정·삭제, 개인 설정, 식당 추가·수정·삭제, 방 만들기·입장)이 먼저 `requireSession()`으로 세션을 확인하게 했다. 페이지를 연 직후 익명 로그인이 끝나기 전에 누르면 요청이 anon 키로 나가 RLS에 막혔다(병렬 E2E에서 식당 추가로 재현). `requireSession`은 진행 중인 첫 로그인을 기다려 익명 사용자가 둘 생기지 않게 한다.

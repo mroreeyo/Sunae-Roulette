@@ -28,14 +28,14 @@ test('two people vote in a room and each sees the other vote without reloading',
 
   const guest = await (await browser.newContext()).newPage();
   await joinAs(guest, code, '손님');
-  await guest.getByRole('button', { name: `${second}에 투표` }).click();
-  await expect(guest.getByRole('button', { name: `${second}에 투표` })).toHaveAttribute('aria-pressed', 'true');
+  await guest.getByRole('button', { name: `${second} 여기 투표` }).click();
+  await expect(guest.getByRole('button', { name: `${second} 내가 고른 곳` })).toHaveAttribute('aria-pressed', 'true');
 
   // The host sees the guest arrive and vote through Realtime.
   await expect(page.getByRole('list', { name: '참여한 사람' })).toContainText('손님');
   await expect(candidateRow(page, second)).toContainText('1표');
 
-  await page.getByRole('button', { name: `${second}에 투표` }).click();
+  await page.getByRole('button', { name: `${second} 여기 투표` }).click();
   await expect(candidateRow(guest, second)).toContainText('2표');
   await guest.context().close();
 });
@@ -65,7 +65,7 @@ test('a room closes at its deadline and the winner lands in the voters history',
 
   const guest = await (await browser.newContext()).newPage();
   await joinAs(guest, code, '손님');
-  await guest.getByRole('button', { name: `${winner}에 투표` }).click();
+  await guest.getByRole('button', { name: `${winner} 여기 투표` }).click();
   await expect(candidateRow(guest, winner)).toContainText('1표');
 
   await joinAs(page, code, '진행자');
@@ -74,7 +74,7 @@ test('a room closes at its deadline and the winner lands in the voters history',
   await expect(page.getByText('투표하지 않아서 내 식사 기록에는 남지 않았어요.')).toBeVisible();
 
   // The guest voted, so the winner is now the guest's lunch.
-  await expect(guest.getByText('투표한 사람의 오늘 식사 기록에 남았어요.')).toBeVisible({ timeout: 15_000 });
+  await expect(guest.getByText(/^투표한 사람의 식사 기록에 남았어요./)).toBeVisible({ timeout: 15_000 });
   await guest.getByRole('link', { name: '기록' }).click();
   await expect(guest.getByRole('list', { name: '식사 목록' })).toContainText(winner);
   await guest.context().close();
