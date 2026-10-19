@@ -144,11 +144,12 @@ export function useCooldownDays() {
   });
 }
 
-export function useRecentMeals() {
+export function useRecentMeals({ refetchOnMount }: { refetchOnMount?: 'always' } = {}) {
   const enabled = useSignedIn();
   return useQuery({
     queryKey: queryKeys.meals,
     enabled,
+    refetchOnMount,
     queryFn: async (): Promise<MealRow[]> => {
       const since = addDays(toSeoulDate(new Date()), -HISTORY_CALENDAR_DAYS);
       const { data, error } = await supabase

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(19);
 
 -- Fixtures (as the migration owner, bypassing RLS) ---------------------------
 -- A hosts the room, B votes, C joins without voting, D never joins.
@@ -29,9 +29,9 @@ insert into public.room_candidates (id, room_id, place_id, position, weight) val
 insert into public.votes (room_id, voter_id, candidate_id) values
   ('31000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000001b1', '41000000-0000-0000-0000-000000000002');
 
--- C already ate somewhere else today.
+-- C already ate somewhere else on the room's lunch date (the Seoul date of its deadline).
 insert into public.meals (user_id, place_id, eaten_on, spin_count, decision_seconds)
-values ('00000000-0000-0000-0000-0000000001c1', '21000000-0000-0000-0000-000000000001', (now() at time zone 'Asia/Seoul')::date, 3, 40);
+values ('00000000-0000-0000-0000-0000000001c1', '21000000-0000-0000-0000-000000000001', ((now() + interval '1 hour') at time zone 'Asia/Seoul')::date, 3, 40);
 
 set local role authenticated;
 
@@ -62,17 +62,17 @@ select throws_ok(
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000001a1","role":"authenticated"}';
 select lives_ok($$ select public.close_room_now('31000000-0000-0000-0000-000000000001') $$, 'the host closes the room early');
 select results_eq(
-  $$ select status, winner_place_id, deadline_at <= now() from public.rooms where id = '31000000-0000-0000-0000-000000000001' $$,
+  $$ select status, winner_place_id, deadline_at = now() + interval '1 hour' from public.rooms where id = '31000000-0000-0000-0000-000000000001' $$,
   $$ values ('closed', '21000000-0000-0000-0000-000000000002'::uuid, true) $$,
-  'closing early picks the winner and moves the deadline to now'
+  'closing early picks the winner and keeps the deadline'
 );
 select lives_ok($$ select public.close_room_now('31000000-0000-0000-0000-000000000001') $$, 'closing a closed room again does nothing');
 
 reset role;
 select results_eq(
   $$ select place_id, room_id, eaten_on from public.meals where user_id = '00000000-0000-0000-0000-0000000001b1' $$,
-  $$ values ('21000000-0000-0000-0000-000000000002'::uuid, '31000000-0000-0000-0000-000000000001'::uuid, (now() at time zone 'Asia/Seoul')::date) $$,
-  'the voter gets the winner as today''s meal'
+  $$ values ('21000000-0000-0000-0000-000000000002'::uuid, '31000000-0000-0000-0000-000000000001'::uuid, ((now() + interval '1 hour') at time zone 'Asia/Seoul')::date) $$,
+  'the voter gets the winner on the room''s lunch date'
 );
 
 -- After closing: "I ate there too" ---------------------------------------------
@@ -104,6 +104,35 @@ select throws_ok(
   $$ select public.record_room_meal('31000000-0000-0000-0000-000000000001') $$,
   'P0002', null,
   'someone who never joined cannot record the room''s result'
+);
+
+-- Only the room functions set meals.room_id ------------------------------------
+select throws_ok(
+  $$ insert into public.meals (place_id, eaten_on, room_id)
+     values ('21000000-0000-0000-0000-000000000001', '2026-10-01', '31000000-0000-0000-0000-000000000001') $$,
+  '42501', null,
+  'a client cannot attach a new meal to a room'
+);
+select lives_ok(
+  $$ insert into public.meals (place_id, eaten_on) values ('21000000-0000-0000-0000-000000000001', '2026-10-01') $$,
+  'a client still records its own meal'
+);
+select throws_ok(
+  $$ update public.meals set room_id = '31000000-0000-0000-0000-000000000001' where eaten_on = '2026-10-01' $$,
+  '42501', null,
+  'a client cannot attach an existing meal to a room'
+);
+
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000001b1","role":"authenticated"}';
+select lives_ok(
+  $$ insert into public.meals (place_id, eaten_on) values ('21000000-0000-0000-0000-000000000001', ((now() + interval '1 hour') at time zone 'Asia/Seoul')::date)
+     on conflict (user_id, eaten_on) do update set place_id = excluded.place_id $$,
+  'a voter records another place for that day, as the roulette does'
+);
+select results_eq(
+  $$ select place_id, room_id from public.meals where user_id = '00000000-0000-0000-0000-0000000001b1' $$,
+  $$ values ('21000000-0000-0000-0000-000000000001'::uuid, null::uuid) $$,
+  'a meal moved to another place is no longer the room''s result'
 );
 
 select * from finish();

@@ -1,5 +1,5 @@
 import { distanceMeters, toSeoulDate, walkMinutes } from '@lunch/core';
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { useAppConfig, useRecentMeals, useSession } from '../features/data/queries.ts';
 import {
@@ -15,11 +15,13 @@ import {
   type Room,
   type RoomCandidate,
 } from '../features/room/api.ts';
-import { formatRemaining, seoulTime, useNow } from '../features/room/time.ts';
+import { formatRemaining, seoulDayLabel, seoulTime, useNow } from '../features/room/time.ts';
 import { fieldClass } from '../features/ui/field.ts';
 import { kakaoMapUrl, naverMapUrl } from '../lib/mapLinks.ts';
 
 const MAX_NICKNAME = 20;
+/** The result's heading, which takes focus when a close removes the control that had it. */
+const RESULT_HEADING_ID = 'room-result-title';
 
 const primaryButton =
   'inline-flex min-h-14 w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-bold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
@@ -168,6 +170,18 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
   const total = room.votes.size;
   const winner = room.candidates.find((c) => c.placeId === room.winnerPlaceId) ?? null;
 
+  // Closing (by the host or at the deadline) removes the vote and close buttons. If one of them
+  // had focus, the result heading takes it so keyboard and screen reader users are not dropped
+  // at the top of the page.
+  const wasOpen = useRef(room.status === 'open');
+  useEffect(() => {
+    if (room.status !== 'closed' || !wasOpen.current) return;
+    wasOpen.current = false;
+    if (!document.activeElement || document.activeElement === document.body) {
+      document.getElementById(RESULT_HEADING_ID)?.focus();
+    }
+  }, [room.status]);
+
   function minutesTo(c: RoomCandidate): number | null {
     if (!config.data || c.lat === null || c.lng === null) return null;
     return walkMinutes(distanceMeters(config.data.base, { lat: c.lat, lng: c.lng }));
@@ -198,14 +212,26 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
 
       {room.status === 'closed' && <Result room={room} winner={winner} minutes={winner ? minutesTo(winner) : null} />}
 
-      {votingOpen && myId === room.hostId && <HostClose room={room} />}
-
       {votingOpen && <SharePanel code={room.code} />}
+
+      {votingOpen && myId === room.hostId && <HostClose room={room} />}
 
       <section aria-labelledby="candidates-title" className="flex flex-col gap-2">
         <h2 id="candidates-title" className="text-[17px] font-bold">
           후보 · {total}표
         </h2>
+        {/* Above the list, so it shows right where the vote button was tapped. Kept in the
+            accessibility tree while empty so the first message is announced. */}
+        <p role="status" className="text-[14px] text-ink-muted empty:sr-only">
+          {votingOpen && myVote !== undefined
+            ? `투표했어요. ${seoulTime(room.deadlineAt)}에 가장 많은 표를 받은 곳으로 정해져요. 마감 전까지는 다른 곳으로 바꿀 수 있고, 결과는 이 화면과 홈에서 볼 수 있어요.`
+            : ''}
+        </p>
+        {vote.isError && (
+          <p role="alert" className="text-[14px] text-accent-ink">
+            투표하지 못했어요. {vote.error.message}
+          </p>
+        )}
         <ol className="flex flex-col gap-2" aria-label="후보 목록">
           {room.candidates.map((c) => {
             const count = counts.get(c.id) ?? 0;
@@ -248,16 +274,6 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
             );
           })}
         </ol>
-        <p role="status" className="text-[14px] text-ink-muted empty:hidden">
-          {votingOpen && myVote !== undefined
-            ? `투표했어요. ${seoulTime(room.deadlineAt)}에 가장 많은 표를 받은 곳으로 정해져요. 마감 전까지는 다른 곳으로 바꿀 수 있고, 결과는 이 화면과 홈에서 볼 수 있어요.`
-            : ''}
-        </p>
-        {vote.isError && (
-          <p role="alert" className="text-[14px] text-accent-ink">
-            투표하지 못했어요. {vote.error.message}
-          </p>
-        )}
       </section>
 
       <section aria-labelledby="members-title" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
@@ -287,9 +303,22 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
 /** The host can end the vote early, which matters most once everyone has voted. */
 function HostClose({ room }: { room: Room }) {
   const close = useCloseRoomNow(room.id);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmRequested, setConfirmRequested] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const warningId = useId();
   const waiting = room.members.filter((m) => !room.votes.has(m.userId)).length;
   const allVoted = waiting === 0 && room.votes.size > 0;
+  // If everyone votes while the warning is up, there is nothing left to warn about.
+  const confirming = confirmRequested && !allVoted;
+
+  // Focus follows the swap between the trigger and the confirm buttons.
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    if (confirming) confirmButton.current?.focus();
+    else if (wasConfirming.current) trigger.current?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming]);
   const message = allVoted
     ? '모두 투표했어요. 지금 마감할까요?'
     : room.votes.size === 0
@@ -304,22 +333,32 @@ function HostClose({ room }: { room: Room }) {
       <p className="mt-1 text-[14px] text-ink-muted">{message}</p>
       {confirming ? (
         <div className="mt-3 flex flex-col gap-2">
-          <p className="text-[14px] font-semibold">지금 마감하면 아직 투표하지 않은 사람은 투표할 수 없어요.</p>
+          <p id={warningId} className="text-[14px] font-semibold">
+            지금 마감하면 아직 투표하지 않은 사람은 투표할 수 없어요.
+          </p>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" className={accentButton} disabled={close.isPending} onClick={() => close.mutate()}>
+            <button
+              ref={confirmButton}
+              type="button"
+              aria-describedby={warningId}
+              className={accentButton}
+              disabled={close.isPending}
+              onClick={() => close.mutate()}
+            >
               {close.isPending ? '마감하는 중' : '그래도 마감하기'}
             </button>
-            <button type="button" className={secondaryButton} disabled={close.isPending} onClick={() => setConfirming(false)}>
+            <button type="button" className={secondaryButton} disabled={close.isPending} onClick={() => setConfirmRequested(false)}>
               취소
             </button>
           </div>
         </div>
       ) : (
         <button
+          ref={trigger}
           type="button"
           className={`${allVoted ? accentButton : secondaryButton} mt-3 w-full`}
           disabled={close.isPending}
-          onClick={() => (allVoted ? close.mutate() : setConfirming(true))}
+          onClick={() => (allVoted ? close.mutate() : setConfirmRequested(true))}
         >
           {close.isPending ? '마감하는 중' : '지금 마감하기'}
         </button>
@@ -395,18 +434,22 @@ function NextSteps({ primary }: { primary: boolean }) {
 function Result({ room, winner, minutes }: { room: Room; winner: RoomCandidate | null; minutes: number | null }) {
   if (!winner) {
     return (
-      <section className="rounded-3xl bg-surface p-5 ring-1 ring-line">
-        <p className="text-[17px] font-bold">아무도 투표하지 않아 정해지지 않았어요.</p>
+      <section aria-labelledby={RESULT_HEADING_ID} className="rounded-3xl bg-surface p-5 ring-1 ring-line">
+        <h2 id={RESULT_HEADING_ID} tabIndex={-1} className="text-[17px] font-bold outline-none">
+          아무도 투표하지 않아 정해지지 않았어요.
+        </h2>
         <p className="mt-1 mb-4 text-[14px] text-ink-muted">룰렛으로 혼자 정하거나 새 방을 만들어 보세요.</p>
         <NextSteps primary />
       </section>
     );
   }
   return (
-    <section aria-labelledby="winner-name" className="rounded-[28px] bg-ink/[0.03] p-1.5 ring-1 ring-line">
+    <section aria-labelledby={RESULT_HEADING_ID} className="rounded-[28px] bg-ink/[0.03] p-1.5 ring-1 ring-line">
       <div className="rounded-[22px] bg-surface p-5">
-        <p className="text-[14px] font-semibold text-accent-ink">오늘 점심은 여기로 정해졌어요</p>
-        <h2 id="winner-name" className="mt-2 text-2xl leading-tight font-bold tracking-tight break-keep">
+        <p className="text-[14px] font-semibold text-accent-ink">
+          {seoulDayLabel(toSeoulDate(new Date(room.deadlineAt)))} 점심은 여기로 정해졌어요
+        </p>
+        <h2 id={RESULT_HEADING_ID} tabIndex={-1} className="mt-2 text-2xl leading-tight font-bold tracking-tight break-keep outline-none">
           {winner.name}
         </h2>
         <p className="mt-1 text-[15px] text-ink-muted">
@@ -428,39 +471,55 @@ function Result({ room, winner, minutes }: { room: Room; winner: RoomCandidate |
   );
 }
 
-function dayLabel(date: string): string {
-  if (date === toSeoulDate(new Date())) return '오늘';
-  const [, month, day] = date.split('-');
-  return `${Number(month)}월 ${Number(day)}일`;
-}
-
 /**
  * Voters get the winner recorded when the room closes, unless they had recorded that day already.
  * Anyone else in the room, or a voter with another record, can put the winner in with one tap.
  */
 function MealRecord({ room, winner }: { room: Room; winner: RoomCandidate }) {
-  const meals = useRecentMeals();
+  // Always fetched again: the close may have just added this meal, and a list cached before the
+  // close (or restored from storage) would not show it.
+  const meals = useRecentMeals({ refetchOnMount: 'always' });
   const record = useRecordRoomMeal(room.id);
+  const status = useRef<HTMLParagraphElement>(null);
   const date = toSeoulDate(new Date(room.deadlineAt));
-  const day = dayLabel(date);
-  if (!meals.data) return <p className="mt-3 h-5 w-48 animate-pulse rounded-full bg-surface-2" aria-label="식사 기록 불러오는 중" />;
+  const day = seoulDayLabel(date);
+  // Offline the fetch pauses; then the record is unknown rather than loading forever.
+  const checking =
+    (meals.fetchStatus === 'fetching' && !meals.isFetchedAfterMount) || (meals.isPending && meals.fetchStatus !== 'paused');
+  const meal = meals.data?.find((m) => m.eatenOn === date);
+  const recorded = !checking && meal?.placeId === winner.placeId;
+  const text = recorded
+    ? `${day} 내 식사 기록에 남았어요.`
+    : !meals.data
+      ? '내 식사 기록을 확인하지 못했어요. 여기서 먹었다면 아래 버튼으로 남길 수 있어요.'
+      : meal
+        ? `${day} 내 기록에는 다른 곳(${meal.name})이 남아 있어요.`
+        : `${day} 내 식사 기록에는 아직 없어요.`;
 
-  const meal = meals.data.find((m) => m.eatenOn === date);
-  if (meal?.placeId === winner.placeId) {
-    return (
-      <p role="status" className="mt-3 text-[14px] text-ink-muted">
-        {day} 내 식사 기록에 남았어요.
-      </p>
-    );
-  }
   return (
     <div className="mt-3 flex flex-col gap-2">
-      <p className="text-[14px] text-ink-muted">
-        {meal ? `${day} 내 기록에는 다른 곳(${meal.name})이 남아 있어요.` : `${day} 내 식사 기록에는 아직 없어요.`}
+      {/* One status line throughout, so each change is announced; it takes focus from the button
+          that disappears once the meal is recorded. */}
+      <p ref={status} role="status" tabIndex={-1} className="text-[14px] text-ink-muted outline-none">
+        {checking ? (
+          <>
+            <span className="sr-only">내 식사 기록을 확인하는 중이에요.</span>
+            <span aria-hidden="true" className="block h-5 w-48 animate-pulse rounded-full bg-surface-2" />
+          </>
+        ) : (
+          text
+        )}
       </p>
-      <button type="button" className={`${secondaryButton} w-full`} disabled={record.isPending} onClick={() => record.mutate()}>
-        {record.isPending ? '기록하는 중' : meal ? '여기로 기록 바꾸기' : '나도 여기서 먹었어요'}
-      </button>
+      {!checking && !recorded && (
+        <button
+          type="button"
+          className={`${secondaryButton} w-full`}
+          disabled={record.isPending}
+          onClick={() => record.mutate(undefined, { onSuccess: () => status.current?.focus() })}
+        >
+          {record.isPending ? '기록하는 중' : meal ? '여기로 기록 바꾸기' : '나도 여기서 먹었어요'}
+        </button>
+      )}
       {record.isError && (
         <p role="alert" className="text-[14px] text-accent-ink">
           기록하지 못했어요. {record.error.message}

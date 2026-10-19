@@ -63,9 +63,10 @@ begin
 end;
 $$;
 
--- The host ends the vote now, for example once everyone has voted. The deadline moves to now,
--- so the meals land on today's date like a room that closed on time. Closing a room that is
--- already closed does nothing.
+-- The host ends the vote now, for example once everyone has voted. The deadline stays as it was,
+-- so the meals land on the lunch the room was made for, even when a room made the evening
+-- before for the next day's lunch closes early. Closing a room that is already closed does
+-- nothing.
 create function public.close_room_now(p_room_id uuid)
 returns void
 language plpgsql
@@ -87,7 +88,6 @@ begin
     return;
   end if;
 
-  update public.rooms set deadline_at = least(deadline_at, now()) where id = p_room_id;
   perform public.close_room(p_room_id);
 end;
 $$;
@@ -132,3 +132,33 @@ $$;
 
 revoke execute on function public.record_room_meal(uuid) from public, anon;
 grant execute on function public.record_room_meal(uuid) to authenticated;
+
+-- meals.room_id marks a meal as a room's result, so only the room functions above may set it.
+-- Clients may still record or correct their own meals: a meal moved to another place is no
+-- longer the room's result and loses its room_id.
+create function public.meals_room_id_from_rooms_only()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- The room functions run as their owner; requests from the app run as anon or authenticated.
+  if current_user not in ('anon', 'authenticated') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.room_id is not null then
+      raise exception 'room_id is set by the room functions only' using errcode = '42501';
+    end if;
+  elsif new.room_id is distinct from old.room_id and new.room_id is not null then
+    raise exception 'room_id is set by the room functions only' using errcode = '42501';
+  elsif new.place_id is distinct from old.place_id then
+    new.room_id := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger meals_room_id_from_rooms_only
+  before insert or update on public.meals
+  for each row execute function public.meals_room_id_from_rooms_only();

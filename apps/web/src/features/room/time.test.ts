@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { deadlineFromTime, formatRemaining } from './time.ts';
+import { deadlineFromTime, deadlineLabel, formatRemaining, seoulDayLabel } from './time.ts';
+
+describe('seoulDayLabel and deadlineLabel', () => {
+  // 23:30 on 10/19 in Seoul.
+  const now = new Date('2026-10-19T14:30:00Z');
+
+  it('calls the Seoul date of now today', () => {
+    expect(seoulDayLabel('2026-10-19', now)).toBe('오늘');
+    expect(seoulDayLabel('2026-10-20', now)).toBe('10월 20일');
+  });
+
+  it('adds the date only to a deadline on another day', () => {
+    expect(deadlineLabel('2026-10-19T14:50:00Z', now)).toBe('23:50');
+    expect(deadlineLabel('2026-10-20T02:40:00Z', now)).toBe('10월 20일 11:40');
+  });
+});
 
 describe('deadlineFromTime', () => {
   it('uses today when the time is still ahead', () => {

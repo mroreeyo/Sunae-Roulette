@@ -8,6 +8,19 @@ export function seoulTime(iso: string): string {
   return timeFormat.format(new Date(iso));
 }
 
+/** "오늘" for today's Seoul date ("2026-10-19"), otherwise "10월 20일". */
+export function seoulDayLabel(date: string, now = new Date()): string {
+  if (date === toSeoulDate(now)) return '오늘';
+  const [, month, day] = date.split('-');
+  return `${Number(month)}월 ${Number(day)}일`;
+}
+
+/** "11:40", or "10월 20일 11:40" when the deadline is not today in Seoul. */
+export function deadlineLabel(iso: string, now = new Date()): string {
+  const date = toSeoulDate(new Date(iso));
+  return date === toSeoulDate(now) ? seoulTime(iso) : `${seoulDayLabel(date, now)} ${seoulTime(iso)}`;
+}
+
 /** "4분 12초" or "12초" until the deadline. */
 export function formatRemaining(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));

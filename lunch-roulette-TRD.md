@@ -259,7 +259,7 @@ alter table meals add foreign key (room_id) references rooms(id) on delete set n
 | `propose_candidate(room_id, place_id)` | RPC, security definer | 입장자이고 방이 열려 있으며 후보가 6곳 미만일 때 후보 추가 (`weight` 0) | 투표 화면 (F-11, P2) |
 | `close_due_rooms()` | SQL 함수 | 마감 시각이 지난 열린 방마다 `close_room` 실행 | pg\_cron (1분마다) |
 | `close_room(room_id)` | SQL 함수 (권한 없음) | 방 하나에 아래 확정 규칙 실행. 호출하는 쪽이 방 행을 잠근다 | `close_due_rooms`, `close_room_now` |
-| `close_room_now(room_id)` | RPC, security definer | 진행자만. 방 행을 잠그고 `deadline_at`을 지금으로 당긴 뒤 `close_room` 실행. 이미 닫힌 방이면 아무것도 하지 않는다. 진행자가 아니면 `42501` | 투표 화면 (진행자) |
+| `close_room_now(room_id)` | RPC, security definer | 진행자만. 방 행을 잠그고 `close_room` 실행. `deadline_at`은 그대로 두므로, 전날 밤에 만든 다음 날 점심 방을 일찍 닫아도 기록은 그 점심 날짜에 남는다. 이미 닫힌 방이면 아무것도 하지 않는다. 진행자가 아니면 `42501` | 투표 화면 (진행자) |
 | `record_room_meal(room_id)` | RPC, security definer | 입장자만. 닫혔고 결과가 있는 방의 1위 식당을 마감일 기록으로 upsert(그날 기록이 있으면 바꾸고 `spin_count`·`decision_seconds`는 비운다). 식당과 날짜는 서버가 정하므로 다른 방의 `room_id`를 붙일 수 없다 | 결과 화면 ("나도 여기서 먹었어요") |
 
 **방 확정 규칙 (`close_room`)**
@@ -284,7 +284,7 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 | --- | --- | --- |
 | `app_config` | 로그인한 누구나 | service role만 |
 | `places` | 로그인한 누구나 | 추가: `source='manual'`이고 `created_by = auth.uid()`일 때. 수정: 본인이 추가한 `manual` 행만. 삭제는 기록이 참조할 수 있어 `is_active=false`로 처리한다. `public` 행은 service role(가져오기 스크립트)만 |
-| `user_place_prefs`, `meals`, `profiles` | 본인 행만 (`user_id = auth.uid()`) | 본인 행만. upsert를 쓰므로 insert와 update 정책을 모두 둔다 |
+| `user_place_prefs`, `meals`, `profiles` | 본인 행만 (`user_id = auth.uid()`) | 본인 행만. upsert를 쓰므로 insert와 update 정책을 모두 둔다. `meals.room_id`는 트리거(`meals_room_id_from_rooms_only`)가 클라이언트의 설정을 막아 방 함수만 채우고, 클라이언트가 식당을 바꾼 기록은 `room_id`를 비운다 |
 | `import_logs` | 없음 (대시보드에서 확인) | service role만 |
 | `rooms`, `room_candidates`, `room_members` | `is_room_member(room_id)`가 참일 때 | 직접 쓰기 금지. `create-room`, `join_room`, `close_room_now`, `propose_candidate`로만 |
 | `votes` | `is_room_member(room_id)`가 참일 때 | 본인 `voter_id`이고, `rooms.status='open'`이며 `deadline_at > now()`일 때만 (insert·update). 수정은 기존 행의 방도 열려 있어야 하고, 트리거가 `room_id`·`voter_id` 변경을 막아 후보만 바꿀 수 있다 |
@@ -345,4 +345,4 @@ pg\_cron의 1분 주기 때문에 확정은 마감 후 최대 1분 늦을 수 �
 - 2026-10-18: v2 검토 반영. 투표 수정이 기존 행의 방 상태를 확인하지 않아 마감된 방의 표를 다른 방으로 옮길 수 있던 문제를 막았다(UPDATE 정책 `using`에 `is_room_open`, `room_id`·`voter_id` 변경 금지 트리거). `join_room`은 마감 시각이 지나면 확정 전이라도 새 사람을 받지 않고, 마감된 방에 다시 들어온 멤버의 닉네임은 바꾸지 않는다(마이그레이션 `20261018000000_v2_rooms_hardening`). `create-room`은 한 사람당 10분에 방 5개로 제한하고, 방 코드를 편향 없이 뽑는다. 화면은 Realtime 구독이 연결될 때와 화면으로 돌아올 때 다시 조회하고, 마감 시각 직후부터 확정될 때까지 5초마다 조회한다. 마감 시각 입력은 자정을 넘기면 다음 날로 해석하고 12시간 제한을 화면에서도 검사한다. 서버 오류는 한국어 문구로 바꿔 보여 주고, 방 관련 mutation은 영속화하지 않는다. 남은 과제: 방 생성의 단일 트랜잭션화, 마감 직전 투표와 확정 처리의 직렬화, 1,000곳을 넘는 식당 조회(확인 필요).
 - 2026-10-18: 모든 쓰기 요청(식사 저장·수정·삭제, 개인 설정, 식당 추가·수정·삭제, 방 만들기·입장)이 먼저 `requireSession()`으로 세션을 확인하게 했다. 페이지를 연 직후 익명 로그인이 끝나기 전에 누르면 요청이 anon 키로 나가 RLS에 막혔다(병렬 E2E에서 식당 추가로 재현). `requireSession`은 진행 중인 첫 로그인을 기다려 익명 사용자가 둘 생기지 않게 한다.
 - 2026-10-19: 가져오기 상호명 규칙 보강. 편의점 브랜드(세븐일레븐, GS25, CU, 이마트24, 미니스톱)와 설빙, 맥주·술집·포차를 제외 대상에 넣고, 업태로는 "기타"가 되는 곳 가운데 상호명에 떡볶이·김밥·분식·만두·오뎅·어묵이 들어간 곳을 "분식"으로 분류했다. 로컬 데이터 기준으로 4곳(세븐일레븐 분당초림점, 설빙 분당수내역점, 역전할머니맥주 분당수내역점, 수내포차)을 비활성화해 활성 식당이 248곳이 되었고, 4곳(신전떡볶이 수내점, 1996 조아분식, 수내왕만두, 부산진오뎅)이 기타에서 분식으로 바뀌었다. `toCategory()` 테스트는 `categories.test.ts`로 옮겼다.
-- 2026-10-19: 투표 뒤 후속 동작(마이그레이션 `20261019000000_v2_room_follow_ups`). 확정 규칙을 방 하나 단위의 `close_room`으로 떼어 내 `close_due_rooms`와 진행자의 조기 마감 RPC `close_room_now`가 함께 쓴다. 결과를 내 기록에 넣는 `record_room_meal`을 추가했다. 홈은 `['room','today']` 쿼리로 오늘(서울) 마감하는 내가 입장한 방을 읽고(영속화하지 않음), 열린 방의 `rooms` UPDATE를 Realtime으로 구독해 조기 마감도 바로 반영한다.
+- 2026-10-19: 투표 뒤 후속 동작(마이그레이션 `20261019000000_v2_room_follow_ups`). 확정 규칙을 방 하나 단위의 `close_room`으로 떼어 내 `close_due_rooms`와 진행자의 조기 마감 RPC `close_room_now`가 함께 쓴다. 결과를 내 기록에 넣는 `record_room_meal`을 추가했다. 홈은 `['room','today']` 쿼리로 오늘(서울) 0시 이후에 마감하는 내가 입장한 방을 읽고(영속화하지 않음, 다음 날 방은 날짜를 붙여 보여 준다), 열린 방의 `rooms` UPDATE를 Realtime으로 구독해 조기 마감도 바로 반영한다. 조기 마감은 `deadline_at`을 바꾸지 않는다. 결과 화면의 기록 상태는 캐시를 믿지 않고 열 때마다 기록을 다시 조회하며, 닫힌 방이 보이면 홈도 기록을 다시 조회한다. 클라이언트가 `meals.room_id`를 직접 채우거나 바꾸지 못하게 트리거를 추가했다. Realtime 이벤트가 늦거나 빠지는 경우에 대비해 열린 방과 홈의 오늘 투표는 15초마다 다시 조회한다(로컬 E2E에서 입장 이벤트가 5초 넘게 늦은 사례가 있었다).

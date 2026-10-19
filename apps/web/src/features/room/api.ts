@@ -155,20 +155,22 @@ interface CandidateRecord {
 
 /** How often to look for the result once the deadline has passed (pg_cron closes rooms each minute). */
 const WAITING_REFETCH_MS = 5_000;
+/** How often an open room is fetched anyway, in case a Realtime event is late or lost. */
+const OPEN_REFETCH_MS = 15_000;
 
 export function useRoom(roomId: string | null) {
   return useQuery({
     queryKey: roomKeys.detail(roomId ?? ''),
     enabled: roomId !== null,
     // Realtime does not replay events missed while a phone slept, so coming back refetches. An open
-    // room is fetched again right after its deadline, then every few seconds until it closes, in
-    // case the close event is missed.
+    // room is also fetched every 15 seconds (a join, a vote or an early close can arrive late),
+    // right after its deadline, then every few seconds until it closes.
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
       const room = query.state.data;
       if (!room || room.status !== 'open') return false;
       const untilDeadline = new Date(room.deadlineAt).getTime() - Date.now();
-      return untilDeadline > 0 ? untilDeadline + 1_000 : WAITING_REFETCH_MS;
+      return untilDeadline > 0 ? Math.min(untilDeadline + 1_000, OPEN_REFETCH_MS) : WAITING_REFETCH_MS;
     },
     queryFn: async (): Promise<Room> => {
       const [room, candidates, members, votes] = await Promise.all([
@@ -295,12 +297,13 @@ export function useTodaysRooms() {
     queryKey: roomKeys.today,
     enabled: signedIn,
     refetchOnWindowFocus: true,
-    // Look again right after the next deadline, then every few seconds until that room closes.
+    // Like an open room: every 15 seconds in case the close event is lost, right after the next
+    // deadline, then every few seconds until that room closes.
     refetchInterval: (query) => {
       const open = query.state.data?.filter((r) => r.status === 'open') ?? [];
       if (open.length === 0) return false;
       const untilDeadline = Math.min(...open.map((r) => new Date(r.deadlineAt).getTime())) - Date.now();
-      return untilDeadline > 0 ? untilDeadline + 1_000 : WAITING_REFETCH_MS;
+      return untilDeadline > 0 ? Math.min(untilDeadline + 1_000, OPEN_REFETCH_MS) : WAITING_REFETCH_MS;
     },
     queryFn: async (): Promise<TodaysRoom[]> => {
       const startOfToday = new Date(`${toSeoulDate(new Date())}T00:00:00+09:00`).toISOString();
@@ -370,10 +373,20 @@ export function useRoomRealtime(roomId: string | null) {
   }, [client, roomId]);
 }
 
-/** The home screen hears when one of today's open rooms closes, also when the host closed it early. */
-export function useTodaysRoomsRealtime(openRoomIds: string[]) {
+/**
+ * Keeps the home screen in step with today's rooms: it hears when an open room closes (also when
+ * the host closed it early), and refetches the meals once a room shows up closed, since closing
+ * may have recorded today's meal however the close was noticed.
+ */
+export function useTodaysRoomsSync(rooms: TodaysRoom[] | undefined) {
   const client = useQueryClient();
-  const ids = openRoomIds.join(',');
+  const ids = (rooms ?? []).filter((r) => r.status === 'open').map((r) => r.id).join(',');
+  const closedIds = (rooms ?? []).filter((r) => r.status === 'closed').map((r) => r.id).join(',');
+
+  useEffect(() => {
+    if (closedIds) void client.invalidateQueries({ queryKey: queryKeys.meals });
+  }, [client, closedIds]);
+
   useEffect(() => {
     if (!ids) return;
     const refresh = () => {
