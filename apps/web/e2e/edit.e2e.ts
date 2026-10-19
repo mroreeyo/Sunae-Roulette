@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { tourSeen } from './tourSeen.ts';
 
 type SupabaseModule = typeof import('../src/lib/supabase.ts');
 type QueryClientModule = typeof import('../src/lib/queryClient.ts');
@@ -105,7 +106,7 @@ test('only the person who added a place can edit or delete it, and its meals sta
   await expect(row).toContainText('내가 추가');
 
   // Someone else sees the place but gets no edit button.
-  const other = await (await browser.newContext()).newPage();
+  const other = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await other.goto('/places');
   await other.getByRole('searchbox', { name: '식당 이름으로 찾기' }).fill(name);
   const otherRow = other.getByRole('listitem').filter({ hasText: name });

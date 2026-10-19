@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { tourSeen } from './tourSeen.ts';
 
 // Needs the create-room Edge Function served locally (`pnpm functions:serve`).
 type SupabaseModule = typeof import('../src/lib/supabase.ts');
@@ -61,7 +62,7 @@ test('two people vote in a room and each sees the other vote without reloading',
   const code = page.url().split('/r/')[1]!;
   await expect(page.getByRole('region', { name: '남은 시간' })).toContainText(/\d+초 남음|\d+분/);
 
-  const guest = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await joinAs(guest, code, '손님');
   await guest.getByRole('button', { name: `${second} 여기 투표` }).click();
   await expect(guest.getByRole('button', { name: `${second} 내가 고른 곳` })).toHaveAttribute('aria-pressed', 'true');
@@ -86,7 +87,7 @@ test('the host sees a guest who joined before Realtime started sending changes',
   await realtime.joined;
 
   // The guest's join lands after the host's channel joined but before its subscription is live.
-  const guest = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await joinAs(guest, code, '손님');
   realtime.release();
 
@@ -118,7 +119,7 @@ test('a room closes at its deadline and the winner lands in the voters history',
     return { code: (created.data as { code: string }).code, winner: candidates[0]!.name };
   });
 
-  const guest = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await joinAs(guest, code, '손님');
   await guest.getByRole('button', { name: `${winner} 여기 투표` }).click();
   await expect(candidateRow(guest, winner)).toContainText('1표');
@@ -150,7 +151,7 @@ test('the host closes the room once everyone voted, and home shows the result', 
   await expect(page).toHaveURL(/\/r\/[A-HJKMNP-Z2-9]{8}$/);
   const code = page.url().split('/r/')[1]!;
 
-  const guest = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await joinAs(guest, code, '손님');
   // Only the host gets the early close.
   await expect(guest.getByRole('heading', { name: '진행자 메뉴' })).toHaveCount(0);

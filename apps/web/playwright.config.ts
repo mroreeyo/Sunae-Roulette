@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { tourSeen } from './e2e/tourSeen.ts';
 
 // Needs the local Supabase stack (`supabase start`) with places imported.
 export default defineConfig({
@@ -11,6 +12,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     ...devices['Pixel 7'],
+    // The first-visit tour covers the page; tests start past it, except e2e/tour.e2e.ts.
+    storageState: tourSeen,
   },
   webServer: {
     command: 'pnpm dev --port 5173 --strictPort',

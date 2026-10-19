@@ -49,9 +49,10 @@ lunch-roulette/
 │     │  ├─ roulette/        # RouletteWheel, ResultCard, FilterBar
 │     │  ├─ places/          # AddPlaceForm, vocabulary.ts(카테고리·태그 어휘)
 │     │  ├─ ui/              # Chip (공용 토글 칩)
+│     │  ├─ tour/            # ProductTour(첫 방문 사용법 안내), placement.ts(밝힐 영역·카드 위치 계산)
 │     │  └─ room/            # api.ts(미리보기·생성·입장·조회·투표·useRoomRealtime), realtime.ts(구독 뒤 다시 조회하는 시점), time.ts(마감 표시·카운트다운) (v2)
 │     ├─ pages/History.tsx   # 기록 목록 + 30일 통계(core mealStats)
-│     ├─ stores/             # filterStore(localStorage에 기억), rouletteSessionStore (Zustand)
+│     ├─ stores/             # filterStore(localStorage에 기억), rouletteSessionStore, tourStore(안내를 봤는지, localStorage에 기억) (Zustand)
 │     ├─ lib/                # supabase.ts, queryClient.ts(영속화 설정), mapLinks.ts(카카오·네이버 링크)
 │     └─ App.tsx
 ├─ packages/core/            # recommend.ts, cooldown.ts(영업일), weights.ts, geo.ts(거리·도보 시간), room.ts(방 후보·기본 마감) + 테스트
@@ -150,3 +151,4 @@ sequenceDiagram
 - 2026-10-19: 진행자의 조기 마감(`close_room_now`)과 결과 기록(`record_room_meal`) RPC, 홈의 오늘 투표 표시(`features/room/TodaysRooms.tsx`)를 추가했다. 확정 규칙은 `close_room` 하나에 두고 pg_cron과 조기 마감이 함께 쓴다.
 - 2026-10-19: 디자인 시스템 적용에 맞춰 공용 UI 조각(`features/ui`의 `CategoryBadge`, `RadiusRing`, `WalkTime`)과 방향 계산(`packages/core/src/geo.ts`)을 추가했다. 수내 사진 배경은 홈 머리 영역에만 그린다.
 - 2026-10-19: Realtime 구독 뒤 다시 조회하는 시점을 `features/room/realtime.ts`(`subscribeWithRefresh`)로 모았다. 채널 가입 응답 때와, 서버가 Postgres Changes 구독 완료를 알릴 때 다시 조회한다(원인은 TRD 변경 이력 참고).
+- 2026-10-19: 첫 방문 사용법 안내(`features/tour`, `stores/tourStore.ts`)를 추가했다. 홈이 식당을 불러온 뒤 띄우고, 설정의 "사용법 다시 보기"가 다시 띄운다.

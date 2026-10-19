@@ -18,8 +18,10 @@ import { FailedSaveNotices } from '../features/roulette/FailedSaveNotices.tsx';
 import { FilterBar } from '../features/roulette/FilterBar.tsx';
 import { ResultCard } from '../features/roulette/ResultCard.tsx';
 import { RouletteWheel, rotationFor, WheelSkeleton } from '../features/roulette/RouletteWheel.tsx';
+import { ProductTour } from '../features/tour/ProductTour.tsx';
 import { hasActiveFilters, toCoreFilters, useFilters } from '../stores/filterStore.ts';
 import { useRouletteSession } from '../stores/rouletteSessionStore.ts';
+import { useTour } from '../stores/tourStore.ts';
 
 // three.js lives in its own chunk so the first screen stays within the bundle budget.
 const SunaeBackdrop = lazy(() => import('../features/backdrop/SunaeBackdrop.tsx'));
@@ -57,6 +59,7 @@ export default function Home() {
   const { skippedIds, spinCount, firstSpinAt, recordSpin, skip, clearSkipped, reset } = useRouletteSession();
 
   const filters = useFilters();
+  const tour = useTour();
   const filtersActive = hasActiveFilters(filters);
   const reduceMotion = useReducedMotion() ?? false;
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'idle' });
@@ -178,7 +181,9 @@ export default function Home() {
         </p>
       )}
 
-      <FilterBar disabled={spinning} collapsed={compact && !filtersOpen} onExpand={() => setFiltersOpen(true)} />
+      <div data-tour="filters">
+        <FilterBar disabled={spinning} collapsed={compact && !filtersOpen} onExpand={() => setFiltersOpen(true)} />
+      </div>
 
       {loadError ? (
         <div role="alert" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
@@ -267,13 +272,14 @@ export default function Home() {
           outcome.kind === 'spinning' ||
           (outcome.kind === 'result' && outcome.saved) ||
           outcome.kind === 'no-match') && (
-        <button type="button" className={primaryButton} onClick={() => spin(skippedIds)} disabled={spinning}>
+        <button type="button" data-tour="spin" className={primaryButton} onClick={() => spin(skippedIds)} disabled={spinning}>
           {spinning ? '돌리는 중' : outcome.kind === 'result' ? '한 번 더 돌리기' : '돌리기'}
         </button>
       )}
 
       <Link
         to="/rooms/new"
+        data-tour="room"
         className="flex items-center gap-3.5 rounded-3xl bg-surface px-5 py-4 ring-1 ring-line transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 stroke-ink-muted">
@@ -290,6 +296,9 @@ export default function Home() {
           <path d="M9 5 L16 12 L9 19" />
         </svg>
       </Link>
+
+      {/* First visit only, once the spin button it points at is on screen. */}
+      {!tour.done && ready && places.data.length > 0 && outcome.kind === 'idle' && <ProductTour onClose={tour.finish} />}
     </div>
   );
 }

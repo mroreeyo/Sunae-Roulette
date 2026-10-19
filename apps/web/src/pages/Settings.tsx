@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router';
 import { AccountSection } from '../features/account/AccountSection.tsx';
 import { DEFAULT_COOLDOWN_DAYS, useAppConfig, useCooldownDays, useSetCooldown } from '../features/data/queries.ts';
+import { useTour } from '../stores/tourStore.ts';
 
 const MIN_COOLDOWN = 3;
 const MAX_COOLDOWN = 10;
@@ -12,6 +14,8 @@ export default function Settings() {
   const cooldown = useCooldownDays();
   const setCooldown = useSetCooldown();
   const days = cooldown.data ?? DEFAULT_COOLDOWN_DAYS;
+  const replayTour = useTour((s) => s.replay);
+  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col gap-5 pb-4">
@@ -67,6 +71,23 @@ export default function Settings() {
           {config.data ? `${config.data.baseName}, 반경 ${config.data.radiusM}m` : '불러오는 중'}
         </p>
         <p className="mt-1 text-[14px] text-ink-muted">모든 사용자가 같은 기준 위치를 써요.</p>
+      </section>
+
+      <section aria-labelledby="guide-title" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
+        <h2 id="guide-title" className="text-[17px] font-bold">
+          사용법
+        </h2>
+        <p className="mt-1 text-[14px] text-ink-muted">처음 열었을 때 본 화면 안내를 다시 볼 수 있어요.</p>
+        <button
+          type="button"
+          className="mt-4 inline-flex min-h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold ring-1 ring-ink/15 transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          onClick={() => {
+            replayTour();
+            navigate('/');
+          }}
+        >
+          사용법 다시 보기
+        </button>
       </section>
 
       <section aria-labelledby="source-title" className="rounded-3xl bg-surface p-5 ring-1 ring-line">

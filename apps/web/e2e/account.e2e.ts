@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import { tourSeen } from './tourSeen.ts';
 
 // Local Supabase delivers auth emails to Mailpit instead of a real inbox.
 const MAILPIT = 'http://127.0.0.1:54324/api/v1';
@@ -22,7 +23,7 @@ test('linking an email keeps the history and lets another device sign in to it',
   const email = `e2e-${Date.now()}@example.test`;
 
   // Device A: record a meal as an anonymous user, then attach an email.
-  const deviceA = await browser.newPage();
+  const deviceA = await browser.newPage({ storageState: tourSeen });
   await deviceA.goto('/');
   await deviceA.getByRole('button', { name: '돌리기', exact: true }).click();
   await expect(deviceA.getByRole('button', { name: '여기 갈래' })).toBeVisible({ timeout: 6_000 });
@@ -44,7 +45,7 @@ test('linking an email keeps the history and lets another device sign in to it',
   await expect(connected).toBeVisible({ timeout: 10_000 });
 
   // Device B: a fresh browser signs in with the same email and sees device A's meal.
-  const deviceB = await (await browser.newContext()).newPage();
+  const deviceB = await (await browser.newContext({ storageState: tourSeen })).newPage();
   await deviceB.goto('/settings');
   await deviceB.getByRole('button', { name: /이메일로 로그인/ }).click();
   const loginAt = Date.now() - 1000;

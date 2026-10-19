@@ -36,6 +36,7 @@ export default function App() {
       </main>
       <nav
         aria-label="주요 화면"
+        data-tour="nav"
         className="sticky bottom-0 grid grid-cols-4 gap-1 border-t border-line bg-bg/90 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md"
       >
         {NAV_ITEMS.map((item) => (
