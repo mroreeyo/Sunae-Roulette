@@ -1,24 +1,34 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens. One accent (orange) on neutral zinc greys.
- * Radius rule: cards 24px, buttons and chips fully rounded.
- * The app is always dark, whatever the device setting: a light orange
- * accent with near-black text on it.
+ * Design tokens: 수내(藪內, "inside the woods"). A dark ground with a hint of forest green,
+ * neutral greys, and two kinds of emphasis that never compete:
+ * - accent (persimmon): the one thing to look at now on each screen (the spin button and the
+ *   stopped slice, the countdown, the place on the radius ring);
+ * - panel (bright neutral): the result's name and selected states.
+ * Category colours appear only in the history stats.
+ * Shape: cards 24px, panels inside cards 18px, inputs 16px, buttons and chips fully rounded.
+ * Buttons: primary 54px tall, secondary 48px, chips 44px.
+ * The app is always dark, whatever the device setting.
  */
 :root {
   color-scheme: dark;
-  --bg: #0f0f11;
-  --surface: #18181b;
-  --surface-2: #27272a;
-  --ink: #f4f4f5;
-  --ink-muted: #a1a1aa;
-  --line: rgb(255 255 255 / 0.08);
-  --accent: #fb923c;
-  --on-accent: #1c1917;
-  --accent-soft: rgb(251 146 60 / 0.14);
-  --accent-ink: #fdba74;
-  --shadow: rgb(0 0 0 / 0.4);
+  --bg: #0e1411;
+  --surface: #151d19;
+  --surface-2: #1e2823;
+  --ink: #edf2ee;
+  --ink-muted: #9aa89f;
+  /* Only for large numerals (3:1 at 24px+): a vote count of zero. */
+  --ink-faint: #6e7b73;
+  --line: rgb(220 240 228 / 0.1);
+  --accent: #f2a65a;
+  --on-accent: #1b1209;
+  --accent-soft: rgb(242 166 90 / 0.16);
+  --accent-ink: #f7c38f;
+  --panel: #edf2ee;
+  --on-panel: #0e1411;
+  --on-panel-muted: #4a564f;
+  --shadow: rgb(0 0 0 / 0.45);
   /* Brand colours for the map links; near-black text keeps WCAG AA on both. */
   --kakao: #fee500;
   --naver: #03c75a;
@@ -36,11 +46,15 @@
   --color-surface-2: var(--surface-2);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-panel: var(--panel);
+  --color-on-panel: var(--on-panel);
+  --color-on-panel-muted: var(--on-panel-muted);
   --color-kakao: var(--kakao);
   --color-naver: var(--naver);
   --color-on-brand: var(--on-brand);

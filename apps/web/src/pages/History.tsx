@@ -2,6 +2,8 @@ import { mealStats, toSeoulDate } from '@lunch/core';
 import { useMemo, useState } from 'react';
 import { useDeleteMeal, useRecentMeals } from '../features/data/queries.ts';
 import { MealPlaceEditor } from '../features/history/MealPlaceEditor.tsx';
+import { CATEGORY_COLORS } from '../features/places/vocabulary.ts';
+import { CategoryBadge } from '../features/ui/CategoryBadge.tsx';
 
 const rowButton =
   'min-h-11 shrink-0 rounded-full px-3 text-[14px] text-ink-muted transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
@@ -24,7 +26,7 @@ export default function History() {
   return (
     <div className="flex flex-col gap-5 pb-4">
       <header className="pt-2">
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">식사 기록</h1>
+        <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em]">식사 기록</h1>
         <p className="mt-1 text-[15px] text-ink-muted">최근 45일</p>
         {/* Always rendered so screen readers pick up each new notice. */}
         <p role="status" className="text-[14px] font-semibold text-accent-ink not-empty:mt-2">
@@ -58,7 +60,10 @@ export default function History() {
               {stats.categories.map((c) => (
                 <li key={c.category} className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-3 text-[14px]">
                   <span className="font-semibold">{c.category}</span>
-                  <span className="h-2.5 rounded-full bg-accent" style={{ width: `${Math.max(c.ratio * 100, 4)}%` }} />
+                  <span
+                    className="h-2.5 rounded-full"
+                    style={{ width: `${Math.max(c.ratio * 100, 4)}%`, background: CATEGORY_COLORS[c.category] ?? 'var(--ink-muted)' }}
+                  />
                   <span className="text-right text-ink-muted tabular-nums">{Math.round(c.ratio * 100)}%</span>
                 </li>
               ))}
@@ -68,7 +73,7 @@ export default function History() {
               {stats.topPlaces.map((p, i) => (
                 <li key={p.placeId} className="flex justify-between gap-3">
                   <span className="truncate">
-                    <span className="mr-2 font-semibold text-accent-ink tabular-nums">{i + 1}</span>
+                    <span className="mr-2 font-extrabold text-ink-muted tabular-nums">{i + 1}</span>
                     {p.name}
                   </span>
                   <span className="shrink-0 text-ink-muted tabular-nums">{p.count}번</span>
@@ -87,9 +92,7 @@ export default function History() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-[13px] text-ink-muted">
                       {date}
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-semibold text-accent-ink">
-                        {meal.category}
-                      </span>
+                      <CategoryBadge category={meal.category} />
                     </p>
                     <p className="mt-0.5 truncate text-[16px] font-semibold">{meal.name}</p>
                   </div>

@@ -56,7 +56,7 @@ export default function Places() {
     <div className="flex flex-col gap-5 pb-4">
       <header className="flex items-end justify-between gap-3 pt-2">
         <div>
-          <h1 className="text-[26px] leading-tight font-bold tracking-tight">식당 목록</h1>
+          <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em]">식당 목록</h1>
           <p className="mt-1 text-[15px] text-ink-muted">
             {places.data ? `${places.data.length}곳, 걸어서 가까운 순` : '불러오는 중'}
           </p>
@@ -139,7 +139,7 @@ export default function Places() {
                       {place.category} · {minutes === null ? '위치 정보 없음' : `걸어서 약 ${Math.max(1, Math.round(minutes))}분`}
                     </p>
                     {pref.tags.length > 0 && (
-                      <p className="mt-1 text-[13px] font-medium text-accent-ink">{pref.tags.join(', ')}</p>
+                      <p className="mt-1 text-[13px] font-semibold text-ink-muted">{pref.tags.join(', ')}</p>
                     )}
                   </div>
                 </div>
@@ -148,7 +148,7 @@ export default function Places() {
                     type="button"
                     aria-pressed={pref.isFavorite}
                     onClick={() => setPref.mutate({ placeId: place.id, patch: { isFavorite: !pref.isFavorite } })}
-                    className={`${smallButton} ${pref.isFavorite ? 'bg-accent text-on-accent ring-accent' : 'bg-surface text-ink ring-line'}`}
+                    className={`${smallButton} ${pref.isFavorite ? 'bg-panel text-on-panel ring-panel' : 'bg-surface text-ink ring-line'}`}
                   >
                     즐겨찾기
                   </button>

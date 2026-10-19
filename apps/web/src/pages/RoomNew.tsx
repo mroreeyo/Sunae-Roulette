@@ -2,12 +2,13 @@ import { useId, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { fetchPreview, readNickname, rememberNickname, useCreateRoom, useRoomPreview, type PreviewCandidate } from '../features/room/api.ts';
 import { deadlineFromTime, seoulTime } from '../features/room/time.ts';
+import { CategoryBadge } from '../features/ui/CategoryBadge.tsx';
 import { fieldClass } from '../features/ui/field.ts';
 
 const MAX_NICKNAME = 20;
 
 const primaryButton =
-  'inline-flex min-h-14 w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-bold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-flex min-h-[54px] w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-extrabold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export default function RoomNew() {
   const ids = { nickname: useId(), deadline: useId(), error: useId() };
@@ -68,12 +69,12 @@ export default function RoomNew() {
   return (
     <div className="flex flex-col gap-5 pb-4">
       <header className="pt-2">
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">팀이랑 정하기</h1>
+        <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em]">팀이랑 정하기</h1>
         <p className="mt-1 text-[15px] text-ink-muted">후보 3곳으로 투표 방을 만들어요. 링크를 받은 사람은 로그인 없이 투표할 수 있어요.</p>
       </header>
 
       <section aria-labelledby="candidates-title" className="flex flex-col gap-2">
-        <h2 id="candidates-title" className="text-[17px] font-bold">
+        <h2 id="candidates-title" className="text-[20px] font-extrabold tracking-[-0.02em]">
           후보
         </h2>
         {preview.isPending ? (
@@ -89,7 +90,7 @@ export default function RoomNew() {
             <button
               type="button"
               onClick={() => void preview.refetch()}
-              className="mt-3 min-h-11 rounded-full bg-surface-2 px-4 text-[14px] font-semibold text-ink"
+              className="mt-3 min-h-12 rounded-full bg-surface-2 px-5 text-[15px] font-semibold text-ink"
             >
               다시 시도
             </button>
@@ -101,20 +102,23 @@ export default function RoomNew() {
         ) : (
           <ol className="flex flex-col gap-2" aria-label="후보 목록">
             {candidates?.map((c, index) => (
-              <li key={c.placeId} className="flex min-h-[76px] items-center gap-3 rounded-3xl bg-surface px-5 py-3 ring-1 ring-line">
-                <span className="text-[15px] font-bold text-accent-ink tabular-nums">{index + 1}</span>
+              <li key={c.placeId} className="flex min-h-[80px] items-center gap-3.5 rounded-3xl bg-surface px-5 py-3.5 ring-1 ring-line">
+                <span aria-hidden="true" className="w-6 shrink-0 text-[28px] leading-none font-extrabold tracking-[-0.04em] text-ink-muted tabular-nums">
+                  {index + 1}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[16px] font-semibold">{c.name}</p>
-                  <p className="text-[13px] text-ink-muted">
-                    {c.category} · {c.walkMinutes === null ? '위치 정보 없음' : `걸어서 약 ${Math.max(1, Math.round(c.walkMinutes))}분`}
-                  </p>
+                  <p className="truncate text-[17px] font-bold">{c.name}</p>
+                  <div className="mt-1 flex items-center gap-2 text-[13px] text-ink-muted">
+                    <CategoryBadge category={c.category} />
+                    {c.walkMinutes === null ? '위치 정보 없음' : `걸어서 약 ${Math.max(1, Math.round(c.walkMinutes))}분`}
+                  </div>
                 </div>
                 <button
                   type="button"
                   disabled={swapping !== null || createRoom.isPending}
                   onClick={() => void swap(index)}
                   aria-label={`${c.name} 다른 식당으로 바꾸기`}
-                  className="min-h-11 shrink-0 rounded-full px-3 text-[14px] text-ink-muted transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-50"
+                  className="min-h-11 shrink-0 rounded-full px-4 text-[14px] font-semibold ring-1 ring-ink/15 transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   {swapping === index ? '찾는 중' : '바꾸기'}
                 </button>

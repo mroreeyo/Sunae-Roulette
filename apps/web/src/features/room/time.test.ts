@@ -48,4 +48,8 @@ describe('formatRemaining', () => {
     expect(formatRemaining(12_000)).toBe('12초');
     expect(formatRemaining(-5_000)).toBe('0초');
   });
+
+  it('switches to hours and minutes past an hour', () => {
+    expect(formatRemaining(2 * 3_600_000 + 5 * 60_000 + 30_000)).toBe('2시간 5분');
+  });
 });

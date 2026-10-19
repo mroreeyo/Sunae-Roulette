@@ -23,10 +23,20 @@ export function deadlineLabel(iso: string, now = new Date()): string {
 
 /** "4분 12초" or "12초" until the deadline. */
 export function formatRemaining(ms: number): string {
+  return remainingParts(ms)
+    .map(([value, unit]) => `${value}${unit}`)
+    .join(' ');
+}
+
+/** The two largest units left: 2시간 5분, 4분 12초, or 12초 alone. */
+export function remainingParts(ms: number): Array<[number, '시간' | '분' | '초']> {
   const total = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(total / 60);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
-  return minutes > 0 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
+  if (hours > 0) return [[hours, '시간'], [minutes, '분']];
+  if (minutes > 0) return [[minutes, '분'], [seconds, '초']];
+  return [[seconds, '초']];
 }
 
 /** The current time, updated every second while the component is mounted. */

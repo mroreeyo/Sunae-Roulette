@@ -22,7 +22,7 @@ test('excluded categories never come up and the filter survives a reload', async
   await excludeRow.getByRole('button', { name: '한식' }).click();
 
   const card = await spin(page);
-  await expect(card.locator('p').first()).not.toHaveText('한식');
+  await expect(card.getByTestId('category')).not.toHaveText('한식');
 
   await page.reload();
   await expect(excludeRow.getByRole('button', { name: '한식' })).toHaveAttribute('aria-pressed', 'true');
@@ -57,7 +57,7 @@ test('the cooldown setting is saved', async ({ page }) => {
 test('history shows 30-day stats after a meal is saved', async ({ page }) => {
   await page.goto('/');
   const card = await spin(page);
-  const category = await card.locator('p').first().innerText();
+  const category = await card.getByTestId('category').innerText();
   await page.getByRole('button', { name: '여기 갈래' }).click();
   await expect(page.getByText('오늘 점심으로 기록했어요.')).toBeVisible();
 

@@ -34,7 +34,7 @@ export default function App() {
       </main>
       <nav
         aria-label="주요 화면"
-        className="sticky bottom-0 grid grid-cols-4 border-t border-line bg-bg/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
+        className="sticky bottom-0 grid grid-cols-4 gap-1 border-t border-line bg-bg/90 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md"
       >
         {NAV_ITEMS.map((item) => (
           <NavLink
@@ -42,8 +42,8 @@ export default function App() {
             to={item.to}
             end
             className={({ isActive }) =>
-              `flex min-h-14 items-center justify-center text-[15px] transition-colors duration-200 ease-soft ${
-                isActive ? 'font-bold text-accent-ink' : 'text-ink-muted'
+              `flex min-h-12 items-center justify-center rounded-full text-[15px] transition-colors duration-200 ease-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                isActive ? 'bg-surface-2 font-extrabold text-ink' : 'text-ink-muted'
               }`
             }
           >

@@ -148,3 +148,4 @@ sequenceDiagram
 - 2026-10-14: 식당 데이터 출처를 공공데이터로 변경. 카카오 로컬 API, `sync-places`·`search-place`, pg\_net, Vault 키를 제거하고 가져오기 스크립트(`scripts/import-places`)를 추가. 지도는 카카오맵·네이버 지도 링크(`lib/mapLinks.ts`)로만 연결한다.
 - 2026-10-16: v2 팀 투표 방 구현에 맞춰 저장소 구조를 갱신했다(`features/room/api.ts`, `packages/core/src/room.ts`, `supabase/functions/_shared/core` 복사 방식, `pnpm functions:deploy`).
 - 2026-10-19: 진행자의 조기 마감(`close_room_now`)과 결과 기록(`record_room_meal`) RPC, 홈의 오늘 투표 표시(`features/room/TodaysRooms.tsx`)를 추가했다. 확정 규칙은 `close_room` 하나에 두고 pg_cron과 조기 마감이 함께 쓴다.
+- 2026-10-19: 디자인 시스템 적용에 맞춰 공용 UI 조각(`features/ui`의 `CategoryBadge`, `RadiusRing`, `WalkTime`)과 방향 계산(`packages/core/src/geo.ts`)을 추가했다. 수내 사진 배경은 홈 머리 영역에만 그린다.

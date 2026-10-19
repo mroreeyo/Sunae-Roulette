@@ -1,6 +1,7 @@
 export * from './types.ts';
 export { addDays, businessWindowStart, isBusinessDay, toSeoulDate } from './cooldown.ts';
-export { distanceMeters, walkMinutes, ROUTE_FACTOR, WALK_METERS_PER_MINUTE } from './geo.ts';
+export { compassDirection, distanceMeters, offsetMeters, walkMinutes, ROUTE_FACTOR, WALK_METERS_PER_MINUTE } from './geo.ts';
+export type { CompassDirection } from './geo.ts';
 export {
   buildWeightContext,
   placeWeight,

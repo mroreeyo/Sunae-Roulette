@@ -16,7 +16,7 @@ export default function Settings() {
   return (
     <div className="flex flex-col gap-5 pb-4">
       <header className="pt-2">
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">설정</h1>
+        <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em]">설정</h1>
       </header>
 
       <section aria-labelledby="cooldown-title" className="rounded-3xl bg-surface p-5 ring-1 ring-line">

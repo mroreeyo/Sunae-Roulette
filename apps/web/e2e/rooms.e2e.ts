@@ -24,7 +24,7 @@ test('two people vote in a room and each sees the other vote without reloading',
   await page.getByRole('button', { name: '투표 방 만들기' }).click();
   await expect(page).toHaveURL(/\/r\/[A-HJKMNP-Z2-9]{8}$/);
   const code = page.url().split('/r/')[1]!;
-  await expect(page.getByText(/마감 · .*남음/)).toBeVisible();
+  await expect(page.getByRole('region', { name: '남은 시간' })).toContainText(/\d+초 남음|\d+분/);
 
   const guest = await (await browser.newContext()).newPage();
   await joinAs(guest, code, '손님');
@@ -100,7 +100,7 @@ test('the host closes the room once everyone voted, and home shows the result', 
   // Only the host gets the early close.
   await expect(guest.getByRole('heading', { name: '진행자 메뉴' })).toHaveCount(0);
   await guest.getByRole('button', { name: `${first} 여기 투표` }).click();
-  await expect(guest.getByRole('status').filter({ hasText: '투표했어요.' })).toContainText('마감 전까지는 다른 곳으로 바꿀 수 있고');
+  await expect(guest.getByRole('status').filter({ hasText: '투표했어요.' })).toContainText('마감 전까지는 다른 곳으로 바꿀 수 있어요');
 
   // The guest's home screen points back to the open vote.
   await guest.getByRole('link', { name: '룰렛', exact: true }).click();
@@ -131,7 +131,7 @@ test('closing a room without votes asks first and ends without a winner', async 
 
   await page.getByRole('button', { name: '지금 마감하기' }).click();
   await page.getByRole('button', { name: '취소' }).click();
-  await expect(page.getByText(/마감 · .*남음/)).toBeVisible();
+  await expect(page.getByRole('region', { name: '남은 시간' })).toContainText(/\d+초 남음|\d+분/);
 
   await page.getByRole('button', { name: '지금 마감하기' }).click();
   await page.getByRole('button', { name: '그래도 마감하기' }).click();

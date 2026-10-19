@@ -4,7 +4,7 @@ import { useTodaysRooms, useTodaysRoomsSync, type TodaysRoom } from './api.ts';
 import { deadlineLabel, seoulDayLabel, useNow } from './time.ts';
 
 const roomLink =
-  'inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-accent px-4 text-[14px] font-semibold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-surface-2 px-4 text-[14px] font-bold text-ink transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 /** Today's team votes I joined, so the vote and its result can be found again after leaving the room. */
 export function TodaysRooms() {

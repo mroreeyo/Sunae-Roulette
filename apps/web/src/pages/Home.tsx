@@ -44,7 +44,7 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 const primaryButton =
-  'inline-flex min-h-14 w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-bold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-flex min-h-[54px] w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-extrabold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export default function Home() {
   const session = useSession();
@@ -62,6 +62,8 @@ export default function Home() {
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'idle' });
   const rotation = useRef(0);
   const [rotationValue, setRotationValue] = useState(0);
+  // With a result on screen the filters fold into one line until asked for.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const today = toSeoulDate(new Date());
   const todaysMeal = meals.data?.find((m) => m.eatenOn === today);
@@ -96,6 +98,7 @@ export default function Home() {
     rotation.current = rotationFor(pickIndex, wheel.length, rotation.current);
     setRotationValue(rotation.current);
     recordSpin();
+    setFiltersOpen(false);
     setOutcome({ kind: 'spinning', wheel, pickIndex });
   }
 
@@ -134,20 +137,32 @@ export default function Home() {
   const pick = outcome.kind === 'result' ? outcome.wheel[outcome.pickIndex]! : null;
   const spinning = outcome.kind === 'spinning';
   const backdropMode: BackdropMode = spinning ? 'spinning' : outcome.kind === 'result' ? 'settled' : 'idle';
+  // Once a place is picked the photo header and the wheel shrink, so the result and its buttons
+  // fit the first screen.
+  const compact = outcome.kind === 'result';
 
   return (
-    <div className="relative isolate flex flex-col gap-6 pb-4">
-      <div className="pointer-events-none absolute -inset-x-4 -top-4 -z-10 h-[680px] overflow-hidden">
-        <Suspense fallback={null}>
-          <SunaeBackdrop src={BACKDROP_SRC} mode={backdropMode} reduceMotion={reduceMotion} />
-        </Suspense>
-        {/* Dense behind the heading, medium behind the chips, thin behind the wheel, then fade out. */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,var(--bg)_4%,color-mix(in_oklab,var(--bg)_70%,transparent)_22%,color-mix(in_oklab,var(--bg)_60%,transparent)_38%,color-mix(in_oklab,var(--bg)_15%,transparent)_55%,color-mix(in_oklab,var(--bg)_25%,transparent)_80%,var(--bg)_100%)]" />
-      </div>
-
-      <header className="pt-2">
-        <h1 className="text-[26px] leading-tight font-bold tracking-tight">수내에서 뭐먹을까?</h1>
-        <p className="mt-1 text-[15px] text-ink-muted">
+    <div className="flex flex-col gap-5 pb-4">
+      <header
+        className={`relative isolate -mx-4 -mt-4 flex flex-col justify-end overflow-hidden px-5 motion-safe:transition-[height] motion-safe:duration-500 motion-safe:ease-soft ${
+          compact ? 'h-[112px] pb-3.5' : 'h-[260px] pb-6'
+        }`}
+      >
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-0 opacity-70 saturate-[0.7]">
+            <Suspense fallback={null}>
+              <SunaeBackdrop src={BACKDROP_SRC} mode={backdropMode} reduceMotion={reduceMotion} />
+            </Suspense>
+          </div>
+          {/* The photo fades into the page, so the heading reads on any part of it. */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--bg)_35%,transparent)_0%,color-mix(in_oklab,var(--bg)_62%,transparent)_55%,var(--bg)_100%)]" />
+        </div>
+        <h1
+          className={`font-extrabold tracking-[-0.035em] ${compact ? 'text-[26px] leading-tight' : 'text-[38px] leading-[1.12]'}`}
+        >
+          <span className={compact ? undefined : 'block'}>수내에서</span> 뭐먹을까?
+        </h1>
+        <p className="mt-1 text-[14px] font-semibold text-ink/80">
           {config.data ? `${config.data.baseName} 반경 ${config.data.radiusM}m` : '주변 식당을 불러오는 중'}
           {places.data ? ` · ${places.data.length}곳` : ''}
         </p>
@@ -158,12 +173,12 @@ export default function Home() {
       <TodaysRooms />
 
       {todaysMeal && outcome.kind !== 'result' && (
-        <p className="rounded-full bg-accent-soft px-4 py-2.5 text-[14px] font-medium text-accent-ink">
+        <p className="rounded-[18px] bg-surface-2 px-4 py-3 text-[14px] font-medium">
           오늘은 {todaysMeal.name}에서 먹었어요. 다시 고르면 기록이 바뀌어요.
         </p>
       )}
 
-      <FilterBar disabled={spinning} />
+      <FilterBar disabled={spinning} collapsed={compact && !filtersOpen} onExpand={() => setFiltersOpen(true)} />
 
       {loadError ? (
         <div role="alert" className="rounded-3xl bg-surface p-5 ring-1 ring-line">
@@ -184,6 +199,7 @@ export default function Home() {
         <RouletteWheel
           labels={wheelLabels}
           rotation={rotationValue}
+          size={compact ? 184 : 280}
           highlightIndex={outcome.kind === 'result' ? outcome.pickIndex : null}
           onSpinEnd={() =>
             setOutcome((o) => (o.kind === 'spinning' ? { kind: 'result', wheel: o.wheel, pickIndex: o.pickIndex, saved: false } : o))
@@ -199,6 +215,7 @@ export default function Home() {
         <ResultCard
           key={`${pick.place.id}-${rotationValue}`}
           candidate={pick}
+          origin={config.data!}
           saved={outcome.saved}
           saving={saveMeal.isPending}
           waitingForNetwork={saveMeal.isPaused}
@@ -250,9 +267,21 @@ export default function Home() {
 
       <Link
         to="/rooms/new"
-        className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-surface px-6 text-[15px] font-semibold text-ink ring-1 ring-line transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="flex items-center gap-3.5 rounded-3xl bg-surface px-5 py-4 ring-1 ring-line transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        팀이랑 투표로 정하기
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 stroke-ink-muted">
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 19c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5" />
+          <circle cx="17" cy="9" r="2.6" />
+          <path d="M16.5 13.6c2.6.2 4.5 2.2 4.5 4.9" />
+        </svg>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-[16px] font-bold">팀이랑 투표로 정하기</span>
+          <span className="text-[13px] text-ink-muted">후보 3곳으로 링크 투표를 열어요</span>
+        </span>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 stroke-ink-muted">
+          <path d="M9 5 L16 12 L9 19" />
+        </svg>
       </Link>
     </div>
   );
