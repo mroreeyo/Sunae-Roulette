@@ -1,12 +1,14 @@
-import { distanceMeters, walkMinutes } from '@lunch/core';
+import { distanceMeters, toSeoulDate, walkMinutes } from '@lunch/core';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
-import { useAppConfig, useSession } from '../features/data/queries.ts';
+import { useAppConfig, useRecentMeals, useSession } from '../features/data/queries.ts';
 import {
   readNickname,
   rememberNickname,
   ROOM_NOT_FOUND,
+  useCloseRoomNow,
   useJoinRoom,
+  useRecordRoomMeal,
   useRoom,
   useRoomRealtime,
   useVote,
@@ -21,6 +23,10 @@ const MAX_NICKNAME = 20;
 
 const primaryButton =
   'inline-flex min-h-14 w-full items-center justify-center rounded-full bg-accent px-6 text-[17px] font-bold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+const secondaryButton =
+  'inline-flex min-h-12 items-center justify-center rounded-full bg-surface-2 px-5 text-[15px] font-semibold text-ink transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+const accentButton =
+  'inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-5 text-[15px] font-semibold text-on-accent transition-transform duration-200 ease-soft active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 const mapButton =
   'inline-flex min-h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold text-on-brand transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
@@ -190,7 +196,9 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
         </p>
       </header>
 
-      {room.status === 'closed' && <Result winner={winner} voted={myVote !== undefined} minutes={winner ? minutesTo(winner) : null} />}
+      {room.status === 'closed' && <Result room={room} winner={winner} minutes={winner ? minutesTo(winner) : null} />}
+
+      {votingOpen && myId === room.hostId && <HostClose room={room} />}
 
       {votingOpen && <SharePanel code={room.code} />}
 
@@ -240,6 +248,11 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
             );
           })}
         </ol>
+        <p role="status" className="text-[14px] text-ink-muted empty:hidden">
+          {votingOpen && myVote !== undefined
+            ? `투표했어요. ${seoulTime(room.deadlineAt)}에 가장 많은 표를 받은 곳으로 정해져요. 마감 전까지는 다른 곳으로 바꿀 수 있고, 결과는 이 화면과 홈에서 볼 수 있어요.`
+            : ''}
+        </p>
         {vote.isError && (
           <p role="alert" className="text-[14px] text-accent-ink">
             투표하지 못했어요. {vote.error.message}
@@ -262,10 +275,61 @@ function RoomBody({ room, myId }: { room: Room; myId: string | null }) {
         </ul>
       </section>
 
-      <Link to="/" className="text-center text-[14px] text-ink-muted underline underline-offset-4">
-        혼자 룰렛 돌리러 가기
-      </Link>
+      {room.status === 'open' && (
+        <Link to="/" className="text-center text-[14px] text-ink-muted underline underline-offset-4">
+          혼자 룰렛 돌리러 가기
+        </Link>
+      )}
     </div>
+  );
+}
+
+/** The host can end the vote early, which matters most once everyone has voted. */
+function HostClose({ room }: { room: Room }) {
+  const close = useCloseRoomNow(room.id);
+  const [confirming, setConfirming] = useState(false);
+  const waiting = room.members.filter((m) => !room.votes.has(m.userId)).length;
+  const allVoted = waiting === 0 && room.votes.size > 0;
+  const message = allVoted
+    ? '모두 투표했어요. 지금 마감할까요?'
+    : room.votes.size === 0
+      ? '아직 아무도 투표하지 않았어요. 지금 마감하면 정해지는 곳이 없어요.'
+      : `${waiting}명이 아직 투표하지 않았어요.`;
+
+  return (
+    <section aria-labelledby="host-close-title" className={`rounded-3xl bg-surface p-5 ring-1 ${allVoted ? 'ring-accent' : 'ring-line'}`}>
+      <h2 id="host-close-title" className="text-[15px] font-bold">
+        진행자 메뉴
+      </h2>
+      <p className="mt-1 text-[14px] text-ink-muted">{message}</p>
+      {confirming ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-[14px] font-semibold">지금 마감하면 아직 투표하지 않은 사람은 투표할 수 없어요.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className={accentButton} disabled={close.isPending} onClick={() => close.mutate()}>
+              {close.isPending ? '마감하는 중' : '그래도 마감하기'}
+            </button>
+            <button type="button" className={secondaryButton} disabled={close.isPending} onClick={() => setConfirming(false)}>
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={`${allVoted ? accentButton : secondaryButton} mt-3 w-full`}
+          disabled={close.isPending}
+          onClick={() => (allVoted ? close.mutate() : setConfirming(true))}
+        >
+          {close.isPending ? '마감하는 중' : '지금 마감하기'}
+        </button>
+      )}
+      {close.isError && (
+        <p role="alert" className="mt-2 text-[14px] text-accent-ink">
+          마감하지 못했어요. {close.error.message}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -314,12 +378,27 @@ function SharePanel({ code }: { code: string }) {
   );
 }
 
-function Result({ winner, voted, minutes }: { winner: RoomCandidate | null; voted: boolean; minutes: number | null }) {
+/** What to do when the result is not the plan: decide alone, or vote again with new candidates. */
+function NextSteps({ primary }: { primary: boolean }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <Link to="/" className={primary ? accentButton : secondaryButton}>
+        룰렛으로 정하기
+      </Link>
+      <Link to="/rooms/new" className={secondaryButton}>
+        새 투표 방 만들기
+      </Link>
+    </div>
+  );
+}
+
+function Result({ room, winner, minutes }: { room: Room; winner: RoomCandidate | null; minutes: number | null }) {
   if (!winner) {
     return (
       <section className="rounded-3xl bg-surface p-5 ring-1 ring-line">
         <p className="text-[17px] font-bold">아무도 투표하지 않아 정해지지 않았어요.</p>
-        <p className="mt-1 text-[14px] text-ink-muted">룰렛으로 혼자 정하거나 새 방을 만들어 보세요.</p>
+        <p className="mt-1 mb-4 text-[14px] text-ink-muted">룰렛으로 혼자 정하거나 새 방을 만들어 보세요.</p>
+        <NextSteps primary />
       </section>
     );
   }
@@ -333,11 +412,7 @@ function Result({ winner, voted, minutes }: { winner: RoomCandidate | null; vote
         <p className="mt-1 text-[15px] text-ink-muted">
           {winner.category} · {minutes === null ? '도보 시간 알 수 없음' : `걸어서 약 ${Math.max(1, Math.round(minutes))}분`}
         </p>
-        <p className="mt-3 text-[14px] text-ink-muted">
-          {voted
-            ? '투표한 사람의 식사 기록에 남았어요. 그날 이미 기록이 있었다면 그 기록을 그대로 둬요.'
-            : '투표하지 않아서 내 식사 기록에는 남지 않았어요.'}
-        </p>
+        <MealRecord room={room} winner={winner} />
         <div className="mt-4 grid grid-cols-2 gap-2">
           <a className={`${mapButton} bg-kakao`} href={kakaoMapUrl(winner)} target="_blank" rel="noreferrer">
             카카오맵
@@ -346,7 +421,51 @@ function Result({ winner, voted, minutes }: { winner: RoomCandidate | null; vote
             네이버 지도
           </a>
         </div>
+        <p className="mt-5 mb-2 text-[13px] text-ink-muted">여기가 내키지 않으면</p>
+        <NextSteps primary={false} />
       </div>
     </section>
+  );
+}
+
+function dayLabel(date: string): string {
+  if (date === toSeoulDate(new Date())) return '오늘';
+  const [, month, day] = date.split('-');
+  return `${Number(month)}월 ${Number(day)}일`;
+}
+
+/**
+ * Voters get the winner recorded when the room closes, unless they had recorded that day already.
+ * Anyone else in the room, or a voter with another record, can put the winner in with one tap.
+ */
+function MealRecord({ room, winner }: { room: Room; winner: RoomCandidate }) {
+  const meals = useRecentMeals();
+  const record = useRecordRoomMeal(room.id);
+  const date = toSeoulDate(new Date(room.deadlineAt));
+  const day = dayLabel(date);
+  if (!meals.data) return <p className="mt-3 h-5 w-48 animate-pulse rounded-full bg-surface-2" aria-label="식사 기록 불러오는 중" />;
+
+  const meal = meals.data.find((m) => m.eatenOn === date);
+  if (meal?.placeId === winner.placeId) {
+    return (
+      <p role="status" className="mt-3 text-[14px] text-ink-muted">
+        {day} 내 식사 기록에 남았어요.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <p className="text-[14px] text-ink-muted">
+        {meal ? `${day} 내 기록에는 다른 곳(${meal.name})이 남아 있어요.` : `${day} 내 식사 기록에는 아직 없어요.`}
+      </p>
+      <button type="button" className={`${secondaryButton} w-full`} disabled={record.isPending} onClick={() => record.mutate()}>
+        {record.isPending ? '기록하는 중' : meal ? '여기로 기록 바꾸기' : '나도 여기서 먹었어요'}
+      </button>
+      {record.isError && (
+        <p role="alert" className="text-[14px] text-accent-ink">
+          기록하지 못했어요. {record.error.message}
+        </p>
+      )}
+    </div>
   );
 }

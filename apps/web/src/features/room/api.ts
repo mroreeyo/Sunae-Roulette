@@ -1,14 +1,16 @@
+import { toSeoulDate } from '@lunch/core';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { requireSession, supabase } from '../../lib/supabase.ts';
-import { queryKeys } from '../data/queries.ts';
+import { queryKeys, useSession } from '../data/queries.ts';
 
 /** Room data is live, so it is fetched fresh and never restored from the persisted cache. */
 export const roomKeys = {
   all: ['room'] as const,
   preview: ['room', 'preview'] as const,
   detail: (roomId: string) => ['room', 'detail', roomId] as const,
+  today: ['room', 'today'] as const,
 };
 
 export interface PreviewCandidate {
@@ -222,7 +224,117 @@ export function useVote(roomId: string) {
         throw new Error(isNetworkError(error) ? OFFLINE_MESSAGE : RETRY_MESSAGE);
       }
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: roomKeys.detail(roomId) }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: roomKeys.detail(roomId) }),
+        client.invalidateQueries({ queryKey: roomKeys.today }),
+      ]),
+  });
+}
+
+/** The host ends the vote before its deadline (for example once everyone voted). */
+export function useCloseRoomNow(roomId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: ['room', 'close'],
+    mutationFn: async () => {
+      await requireSession();
+      const { error } = await supabase.rpc('close_room_now', { p_room_id: roomId });
+      if (error) {
+        if (error.code === '42501') throw new Error('방을 만든 사람만 마감할 수 있어요.');
+        throw new Error(isNetworkError(error) ? OFFLINE_MESSAGE : RETRY_MESSAGE);
+      }
+    },
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: roomKeys.detail(roomId) }),
+        client.invalidateQueries({ queryKey: roomKeys.today }),
+        client.invalidateQueries({ queryKey: queryKeys.meals }),
+      ]),
+  });
+}
+
+/** Records a closed room's winner as my meal on the room's date, replacing that day's record. */
+export function useRecordRoomMeal(roomId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: ['room', 'record-meal'],
+    mutationFn: async () => {
+      await requireSession();
+      const { error } = await supabase.rpc('record_room_meal', { p_room_id: roomId });
+      if (error) throw new Error(isNetworkError(error) ? OFFLINE_MESSAGE : RETRY_MESSAGE);
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meals }),
+  });
+}
+
+export interface TodaysRoom {
+  id: string;
+  code: string;
+  deadlineAt: string;
+  status: 'open' | 'closed';
+  winner: { name: string; category: string; address: string | null } | null;
+  voted: boolean;
+}
+
+interface TodaysRoomRecord {
+  id: string;
+  code: string;
+  deadline_at: string;
+  status: 'open' | 'closed';
+  places: { name: string; category: string; address: string | null } | null;
+}
+
+/**
+ * Rooms I joined that close today (Seoul), newest deadline first, for the home screen. Read
+ * policies only return rooms the caller is a member of.
+ */
+export function useTodaysRooms() {
+  const signedIn = useSession().isSuccess;
+  return useQuery({
+    queryKey: roomKeys.today,
+    enabled: signedIn,
+    refetchOnWindowFocus: true,
+    // Look again right after the next deadline, then every few seconds until that room closes.
+    refetchInterval: (query) => {
+      const open = query.state.data?.filter((r) => r.status === 'open') ?? [];
+      if (open.length === 0) return false;
+      const untilDeadline = Math.min(...open.map((r) => new Date(r.deadlineAt).getTime())) - Date.now();
+      return untilDeadline > 0 ? untilDeadline + 1_000 : WAITING_REFETCH_MS;
+    },
+    queryFn: async (): Promise<TodaysRoom[]> => {
+      const startOfToday = new Date(`${toSeoulDate(new Date())}T00:00:00+09:00`).toISOString();
+      const { data: auth } = await supabase.auth.getSession();
+      const userId = auth.session?.user.id;
+      if (!userId) return [];
+      const rooms = await supabase
+        .from('rooms')
+        .select('id, code, deadline_at, status, places(name, category, address)')
+        .gte('deadline_at', startOfToday)
+        .order('deadline_at', { ascending: false })
+        .limit(3)
+        .returns<TodaysRoomRecord[]>();
+      if (rooms.error) throw new Error(isNetworkError(rooms.error) ? OFFLINE_MESSAGE : RETRY_MESSAGE);
+      if (rooms.data.length === 0) return [];
+      const votes = await supabase
+        .from('votes')
+        .select('room_id')
+        .eq('voter_id', userId)
+        .in(
+          'room_id',
+          rooms.data.map((r) => r.id),
+        );
+      if (votes.error) throw new Error(isNetworkError(votes.error) ? OFFLINE_MESSAGE : RETRY_MESSAGE);
+      const votedIn = new Set((votes.data as { room_id: string }[]).map((v) => v.room_id));
+      return rooms.data.map((r) => ({
+        id: r.id,
+        code: r.code,
+        deadlineAt: r.deadline_at,
+        status: r.status,
+        winner: r.places,
+        voted: votedIn.has(r.id),
+      }));
+    },
   });
 }
 
@@ -244,8 +356,9 @@ export function useRoomRealtime(roomId: string | null) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomId}` }, refresh)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, () => {
         void refresh();
-        // A closed room may have added today's meal.
+        // A closed room may have added today's meal, and the home screen shows its result.
         void client.invalidateQueries({ queryKey: queryKeys.meals });
+        void client.invalidateQueries({ queryKey: roomKeys.today });
       })
       // Changes made before the channel was ready, or while it was reconnecting, are not replayed.
       .subscribe((status) => {
@@ -255,6 +368,28 @@ export function useRoomRealtime(roomId: string | null) {
       void supabase.removeChannel(channel);
     };
   }, [client, roomId]);
+}
+
+/** The home screen hears when one of today's open rooms closes, also when the host closed it early. */
+export function useTodaysRoomsRealtime(openRoomIds: string[]) {
+  const client = useQueryClient();
+  const ids = openRoomIds.join(',');
+  useEffect(() => {
+    if (!ids) return;
+    const refresh = () => {
+      void client.invalidateQueries({ queryKey: roomKeys.today });
+      void client.invalidateQueries({ queryKey: queryKeys.meals });
+    };
+    const channel = supabase
+      .channel(`today-rooms:${ids}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=in.(${ids})` }, refresh)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void client.invalidateQueries({ queryKey: roomKeys.today });
+      });
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [client, ids]);
 }
 
 const NICKNAME_KEY = 'lunch-nickname';

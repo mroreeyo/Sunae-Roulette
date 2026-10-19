@@ -8,7 +8,7 @@
 flowchart LR
   B["브라우저 · React 앱<br/>Vercel 정적 배포<br/>recommend() 추천 계산<br/>TanStack Query 캐시 (localStorage 영속화)"]
   subgraph S[Supabase]
-    DB["Postgres + RLS<br/>app_config, places, meals, prefs<br/>rooms, room_members, votes (v2)<br/>RPC: join_room, close_due_rooms (v2)"]
+    DB["Postgres + RLS<br/>app_config, places, meals, prefs<br/>rooms, room_members, votes (v2)<br/>RPC: join_room, close_room_now,<br/>record_room_meal, close_due_rooms (v2)"]
     AU["Auth<br/>익명 로그인 → uid"]
     RT["Realtime (v2)<br/>votes · rooms · room_members 변경 전달"]
     FN["Edge Function (v2)<br/>create-room"]
@@ -147,3 +147,4 @@ sequenceDiagram
 - 2026-10-14: 거리 계산(`geo.ts`)을 `apps/web/src/lib`에서 `packages/core`로 이동. 필터 판정과 v2 `create-room`이 같은 계산을 쓰기 때문이다.
 - 2026-10-14: 식당 데이터 출처를 공공데이터로 변경. 카카오 로컬 API, `sync-places`·`search-place`, pg\_net, Vault 키를 제거하고 가져오기 스크립트(`scripts/import-places`)를 추가. 지도는 카카오맵·네이버 지도 링크(`lib/mapLinks.ts`)로만 연결한다.
 - 2026-10-16: v2 팀 투표 방 구현에 맞춰 저장소 구조를 갱신했다(`features/room/api.ts`, `packages/core/src/room.ts`, `supabase/functions/_shared/core` 복사 방식, `pnpm functions:deploy`).
+- 2026-10-19: 진행자의 조기 마감(`close_room_now`)과 결과 기록(`record_room_meal`) RPC, 홈의 오늘 투표 표시(`features/room/TodaysRooms.tsx`)를 추가했다. 확정 규칙은 `close_room` 하나에 두고 pg_cron과 조기 마감이 함께 쓴다.

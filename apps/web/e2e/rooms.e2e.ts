@@ -71,13 +71,73 @@ test('a room closes at its deadline and the winner lands in the voters history',
   await joinAs(page, code, '진행자');
   await expect(page.getByText('오늘 점심은 여기로 정해졌어요')).toBeVisible({ timeout: 110_000 });
   await expect(page.getByRole('heading', { name: winner })).toBeVisible();
-  await expect(page.getByText('투표하지 않아서 내 식사 기록에는 남지 않았어요.')).toBeVisible();
+
+  // The host did not vote, so nothing was recorded until they say they ate there too.
+  await expect(page.getByText('오늘 내 식사 기록에는 아직 없어요.')).toBeVisible();
+  await page.getByRole('button', { name: '나도 여기서 먹었어요' }).click();
+  await expect(page.getByText('오늘 내 식사 기록에 남았어요.')).toBeVisible();
 
   // The guest voted, so the winner is now the guest's lunch.
-  await expect(guest.getByText(/^투표한 사람의 식사 기록에 남았어요./)).toBeVisible({ timeout: 15_000 });
+  await expect(guest.getByText('오늘 내 식사 기록에 남았어요.')).toBeVisible({ timeout: 15_000 });
   await guest.getByRole('link', { name: '기록' }).click();
   await expect(guest.getByRole('list', { name: '식사 목록' })).toContainText(winner);
   await guest.context().close();
+});
+
+test('the host closes the room once everyone voted, and home shows the result', async ({ page, browser }) => {
+  await page.goto('/rooms/new');
+  const candidates = page.getByRole('list', { name: '후보 목록' }).getByRole('listitem');
+  await expect(candidates).toHaveCount(3);
+  const first = (await candidates.nth(0).getByRole('paragraph').first().innerText()).trim();
+
+  await page.getByRole('textbox', { name: '내 닉네임' }).fill('진행자');
+  await page.getByRole('button', { name: '투표 방 만들기' }).click();
+  await expect(page).toHaveURL(/\/r\/[A-HJKMNP-Z2-9]{8}$/);
+  const code = page.url().split('/r/')[1]!;
+
+  const guest = await (await browser.newContext()).newPage();
+  await joinAs(guest, code, '손님');
+  // Only the host gets the early close.
+  await expect(guest.getByRole('heading', { name: '진행자 메뉴' })).toHaveCount(0);
+  await guest.getByRole('button', { name: `${first} 여기 투표` }).click();
+  await expect(guest.getByRole('status').filter({ hasText: '투표했어요.' })).toContainText('마감 전까지는 다른 곳으로 바꿀 수 있고');
+
+  // The guest's home screen points back to the open vote.
+  await guest.getByRole('link', { name: '룰렛', exact: true }).click();
+  await expect(guest.getByRole('region', { name: '오늘의 팀 투표' })).toContainText('팀 투표 진행 중');
+  await expect(guest.getByRole('region', { name: '오늘의 팀 투표' })).toContainText('투표했어요');
+
+  await expect(page.getByText('1명이 아직 투표하지 않았어요.')).toBeVisible();
+  await page.getByRole('button', { name: `${first} 여기 투표` }).click();
+  await expect(page.getByText('모두 투표했어요. 지금 마감할까요?')).toBeVisible();
+  await page.getByRole('button', { name: '지금 마감하기' }).click();
+  await expect(page.getByRole('heading', { name: first })).toBeVisible();
+  await expect(page.getByText('오늘 내 식사 기록에 남았어요.')).toBeVisible();
+  await expect(page.getByRole('link', { name: '새 투표 방 만들기' })).toBeVisible();
+
+  // The guest left the room, and home now shows the result instead of the vote.
+  await expect(guest.getByRole('region', { name: '오늘의 팀 투표' })).toContainText(`오늘 투표 결과: ${first}`, { timeout: 15_000 });
+  await guest.getByRole('link', { name: /결과 보기$/ }).click();
+  await expect(guest.getByText('오늘 점심은 여기로 정해졌어요')).toBeVisible();
+  await guest.context().close();
+});
+
+test('closing a room without votes asks first and ends without a winner', async ({ page }) => {
+  await page.goto('/rooms/new');
+  await expect(page.getByRole('list', { name: '후보 목록' }).getByRole('listitem')).toHaveCount(3);
+  await page.getByRole('textbox', { name: '내 닉네임' }).fill('진행자');
+  await page.getByRole('button', { name: '투표 방 만들기' }).click();
+  await expect(page).toHaveURL(/\/r\/[A-HJKMNP-Z2-9]{8}$/);
+
+  await page.getByRole('button', { name: '지금 마감하기' }).click();
+  await page.getByRole('button', { name: '취소' }).click();
+  await expect(page.getByText(/마감 · .*남음/)).toBeVisible();
+
+  await page.getByRole('button', { name: '지금 마감하기' }).click();
+  await page.getByRole('button', { name: '그래도 마감하기' }).click();
+  await expect(page.getByText('아무도 투표하지 않아 정해지지 않았어요.')).toBeVisible();
+  await page.getByRole('link', { name: '룰렛으로 정하기' }).click();
+  await expect(page.getByRole('heading', { name: '수내에서 뭐먹을까?' })).toBeVisible();
 });
 
 test('a wrong code says the room cannot be found', async ({ page }) => {
