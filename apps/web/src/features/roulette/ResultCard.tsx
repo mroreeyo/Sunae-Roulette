@@ -22,6 +22,9 @@ interface ResultCardProps {
 const buttonBase =
   'inline-flex items-center justify-center rounded-full px-5 font-semibold transition-transform duration-200 ease-soft active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
+// Vertical padding widens the tap area of an inline link without moving the text.
+const hoursLink = 'py-2 font-semibold text-ink underline underline-offset-4';
+
 export function ResultCard({ candidate, origin, saved, saving, waitingForNetwork, saveError, onAccept, onReroll }: ResultCardProps) {
   const reduceMotion = useReducedMotion();
   const { place, walkMinutes } = candidate;
@@ -59,7 +62,12 @@ export function ResultCard({ candidate, origin, saved, saving, waitingForNetwork
 
         {saved ? (
           <div className="flex flex-col gap-3">
-            <p className="text-[15px] font-semibold">오늘 점심으로 기록했어요.</p>
+            <div>
+              <p className="text-[15px] font-semibold">오늘 점심으로 기록했어요.</p>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-ink-muted">
+                가기 전에 지도에서 영업시간을 확인해 주세요. 문을 닫았다면 기록 화면에서 바꿀 수 있어요.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <a className={`${buttonBase} min-h-12 bg-kakao text-[15px] text-on-brand`} href={kakaoMapUrl(place)} target="_blank" rel="noreferrer">
                 카카오맵
@@ -70,18 +78,32 @@ export function ResultCard({ candidate, origin, saved, saving, waitingForNetwork
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className={`${buttonBase} min-h-[54px] bg-accent text-[17px] font-extrabold text-on-accent disabled:opacity-60`}
-              onClick={onAccept}
-              disabled={saving}
-            >
-              {waitingForNetwork ? '연결 기다리는 중' : saving ? '기록하는 중' : '여기 갈래'}
-            </button>
-            <button type="button" className={`${buttonBase} min-h-[54px] bg-surface-2 text-[16px] text-ink`} onClick={onReroll} disabled={saving}>
-              다시 돌리기
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className={`${buttonBase} min-h-[54px] bg-accent text-[17px] font-extrabold text-on-accent disabled:opacity-60`}
+                onClick={onAccept}
+                disabled={saving}
+              >
+                {waitingForNetwork ? '연결 기다리는 중' : saving ? '기록하는 중' : '여기 갈래'}
+              </button>
+              <button type="button" className={`${buttonBase} min-h-[54px] bg-surface-2 text-[16px] text-ink`} onClick={onReroll} disabled={saving}>
+                다시 돌리기
+              </button>
+            </div>
+            {/* Opening hours are not in the public data, and map API responses may not be stored. */}
+            <p className="text-[13px] leading-relaxed text-ink-muted">
+              저녁에만 여는 곳도 있어요.{' '}
+              <a className={hoursLink} href={kakaoMapUrl(place)} target="_blank" rel="noreferrer">
+                카카오맵
+              </a>
+              이나{' '}
+              <a className={hoursLink} href={naverMapUrl(place)} target="_blank" rel="noreferrer">
+                네이버 지도
+              </a>
+              에서 영업시간을 확인해 보세요.
+            </p>
           </div>
         )}
         {waitingForNetwork && (

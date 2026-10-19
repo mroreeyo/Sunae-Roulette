@@ -597,6 +597,7 @@ function Result({ room, winner, winnerVotes, minutes }: ResultProps) {
             )}
           </div>
           <MealRecord room={room} winner={winner} />
+          <p className="-mb-2 text-[13px] leading-relaxed text-ink-muted">가기 전에 지도에서 영업시간을 확인해 주세요.</p>
           <div className="grid grid-cols-2 gap-2">
             <a className={`${mapButton} bg-kakao`} href={kakaoMapUrl(winner)} target="_blank" rel="noreferrer">
               카카오맵

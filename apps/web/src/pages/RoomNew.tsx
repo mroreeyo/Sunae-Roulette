@@ -129,6 +129,11 @@ export default function RoomNew() {
         {candidates && candidates.length > 0 && candidates.length < 3 && (
           <p className="text-[13px] text-ink-muted">조건에 맞는 식당이 적어서 {candidates.length}곳만 골랐어요.</p>
         )}
+        {candidates && candidates.length > 0 && (
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            저녁에만 여는 곳도 있어요. 카카오맵이나 네이버 지도에서 영업시간을 확인하고, 점심에 열지 않는 곳은 바꿔 주세요.
+          </p>
+        )}
         {swapError && (
           <p role="alert" className="text-[14px] text-accent-ink">
             {swapError}
