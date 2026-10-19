@@ -1,7 +1,7 @@
 import type { Filters } from '@lunch/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { NEAR_WALK_MINUTES } from '../features/places/vocabulary.ts';
+import { FILTER_TAGS, NEAR_WALK_MINUTES } from '../features/places/vocabulary.ts';
 
 interface FilterState {
   nearOnly: boolean;
@@ -28,7 +28,19 @@ export const useFilters = create<FilterState>()(
       toggleCategory: (category) => set((s) => ({ excludedCategories: toggle(s.excludedCategories, category) })),
       clear: () => set({ nearOnly: false, requiredTags: [], excludedCategories: [] }),
     }),
-    { name: 'lunch-filters', storage: createJSONStorage(() => localStorage) },
+    {
+      name: 'lunch-filters',
+      storage: createJSONStorage(() => localStorage),
+      // A tag whose chip was removed (가성비) would otherwise stay applied with no way to turn it off.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<FilterState>;
+        return {
+          ...current,
+          ...saved,
+          requiredTags: (saved.requiredTags ?? []).filter((tag) => FILTER_TAGS.includes(tag)),
+        };
+      },
+    },
   ),
 );
 

@@ -17,9 +17,9 @@ export const CATEGORY_COLORS: Record<string, string> = {
   기타: '#9aa7b8',
 };
 
-/** Tags users can put on a place; 혼밥 and 가성비 also drive home filters (PRD F-05). */
+/** Tags users can put on a place; 혼밥 also drives a home filter (PRD F-05). */
 export const TAGS = ['혼밥', '가성비', '단체석'] as const;
-export const FILTER_TAGS = ['혼밥', '가성비'] as const;
+export const FILTER_TAGS: readonly string[] = ['혼밥'];
 
 /** "도보 5분" filter, in estimated walking minutes. */
 export const NEAR_WALK_MINUTES = 5;
