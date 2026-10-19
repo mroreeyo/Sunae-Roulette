@@ -17,25 +17,26 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'filters',
     title: '조건부터 골라도 돼요',
-    body: `도보 ${NEAR_WALK_MINUTES}분, 혼밥 같은 조건을 켜거나 빼고 싶은 메뉴를 누르면 맞는 식당만 룰렛에 올라가요. 고른 조건은 다음에도 기억해요.`,
+    body: `도보 ${NEAR_WALK_MINUTES}분, 혼밥처럼 켠 조건에 맞는 식당만 룰렛에 올라가요.`,
     radius: 24,
   },
   {
     target: 'spin',
     title: '돌리면 한 곳을 골라 줘요',
-    body: "마음에 들면 '여기 갈래'로 오늘 점심을 기록하고, 아니면 '다시 돌리기'를 누르세요. 최근에 간 곳은 한동안 추천하지 않아요.",
+    // A no-break space keeps the button name on one line.
+    body: "최근에 간 곳은 빼고 골라요. 마음에 들면 '여기 갈래'를 누르세요.",
     radius: 999,
   },
   {
     target: 'room',
     title: '팀이랑 정할 땐 투표로',
-    body: '후보 3곳으로 투표 링크를 만들어 팀원에게 보내요. 각자 휴대폰에서 고르면 결과가 바로 모여요.',
+    body: '후보 3곳으로 투표 링크를 만들어 팀원에게 보내요.',
     radius: 24,
   },
   {
     target: 'nav',
     title: '식당·기록·설정',
-    body: '식당 탭에서 안 가는 곳을 숨기고, 기록 탭에서 지난 점심을 봐요. 이 안내는 설정에서 다시 볼 수 있어요.',
+    body: '안 가는 식당은 숨기고, 지난 점심은 기록에서 봐요. 이 안내는 설정에서 다시 볼 수 있어요.',
     radius: 0,
   },
 ];
@@ -139,13 +140,13 @@ export function ProductTour({ onClose }: { onClose: () => void }) {
       {spot ? (
         <m.div
           aria-hidden="true"
-          className="pointer-events-none absolute top-0 left-0 shadow-[0_0_0_9999px_rgb(5_9_7/0.74)] ring-2 ring-accent"
+          className="pointer-events-none absolute top-0 left-0 shadow-[0_0_0_9999px_rgb(5_9_7/0.86)] ring-1 ring-ink/30"
           initial={false}
           animate={{ x: spot.left, y: spot.top, width: spot.width, height: spot.height, borderRadius: step.radius }}
           transition={transition}
         />
       ) : (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[rgb(5_9_7/0.74)]" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[rgb(5_9_7/0.86)]" />
       )}
       <m.div
         ref={cardRef}
@@ -156,28 +157,35 @@ export function ProductTour({ onClose }: { onClose: () => void }) {
         aria-describedby={bodyId}
         initial={reduceMotion ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+        // The card follows the light, so the eye lands on the target first.
+        transition={{ duration: 0.3, delay: reduceMotion ? 0 : 0.12, ease: [0.32, 0.72, 0, 1] }}
         style={{ top }}
         className="absolute inset-x-4 mx-auto max-w-[24rem] rounded-3xl bg-surface p-5 shadow-[0_24px_60px_-24px_var(--shadow)] ring-1 ring-line"
       >
-        <p className="text-[13px] font-semibold text-ink-muted tabular-nums">
-          {index + 1}/{TOUR_STEPS.length}
-        </p>
-        <h2 id={titleId} className="mt-1 text-[19px] leading-snug font-extrabold tracking-[-0.02em]">
-          {step.title}
-        </h2>
-        <p id={bodyId} className="mt-1.5 text-[15px] leading-relaxed break-keep text-ink-muted">
-          {step.body}
-        </p>
-        <div className="mt-5 flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <h2 id={titleId} className="pt-1 text-[19px] leading-snug font-extrabold tracking-[-0.02em]">
+            {step.title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 rounded-full px-3 text-[14px] font-semibold text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="-mt-2 -mr-2 min-h-11 shrink-0 rounded-full px-3 text-[14px] font-semibold text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             건너뛰기
           </button>
-          <span className="flex-1" />
+        </div>
+        <p id={bodyId} className="mt-1 text-[15px] leading-relaxed break-keep text-ink-muted">
+          {step.body}
+        </p>
+        <div className="mt-4 flex items-center gap-2">
+          <p className="flex-1 text-[13px] font-semibold text-ink-muted tabular-nums">
+            <span aria-hidden="true">
+              {index + 1}/{TOUR_STEPS.length}
+            </span>
+            <span className="sr-only">
+              {TOUR_STEPS.length}단계 중 {index + 1}단계
+            </span>
+          </p>
           {index > 0 && (
             <button
               type="button"
