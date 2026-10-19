@@ -10,6 +10,8 @@ import Settings from './pages/Settings.tsx';
 // Team rooms load on demand so the first screen stays within the bundle budget.
 const RoomNew = lazy(() => import('./pages/RoomNew.tsx'));
 const RoomVote = lazy(() => import('./pages/RoomVote.tsx'));
+// Same placeholder the vote room shows while it loads, so a shared link opens without a blank gap.
+const roomFallback = <div className="mt-2 h-[320px] animate-pulse rounded-3xl bg-surface-2" aria-label="불러오는 중" />;
 
 const NAV_ITEMS = [
   { to: '/', label: '룰렛' },
@@ -28,8 +30,8 @@ export default function App() {
           <Route path="/places" element={<Places />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/rooms/new" element={<RouteErrorBoundary><Suspense fallback={null}><RoomNew /></Suspense></RouteErrorBoundary>} />
-          <Route path="/r/:code" element={<RouteErrorBoundary><Suspense fallback={null}><RoomVote /></Suspense></RouteErrorBoundary>} />
+          <Route path="/rooms/new" element={<RouteErrorBoundary><Suspense fallback={roomFallback}><RoomNew /></Suspense></RouteErrorBoundary>} />
+          <Route path="/r/:code" element={<RouteErrorBoundary><Suspense fallback={roomFallback}><RoomVote /></Suspense></RouteErrorBoundary>} />
         </Routes>
       </main>
       <nav

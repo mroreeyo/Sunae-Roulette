@@ -17,7 +17,7 @@ import { TodaysRooms } from '../features/room/TodaysRooms.tsx';
 import { FailedSaveNotices } from '../features/roulette/FailedSaveNotices.tsx';
 import { FilterBar } from '../features/roulette/FilterBar.tsx';
 import { ResultCard } from '../features/roulette/ResultCard.tsx';
-import { RouletteWheel, rotationFor } from '../features/roulette/RouletteWheel.tsx';
+import { RouletteWheel, rotationFor, WheelSkeleton } from '../features/roulette/RouletteWheel.tsx';
 import { hasActiveFilters, toCoreFilters, useFilters } from '../stores/filterStore.ts';
 import { useRouletteSession } from '../stores/rouletteSessionStore.ts';
 
@@ -189,7 +189,7 @@ export default function Home() {
           </button>
         </div>
       ) : !ready ? (
-        <div className="mx-auto h-[280px] w-[280px] animate-pulse rounded-full bg-surface-2" aria-label="불러오는 중" />
+        <WheelSkeleton />
       ) : places.data.length === 0 ? (
         <div className="rounded-3xl bg-surface p-5 ring-1 ring-line">
           <p className="font-semibold">아직 등록된 식당이 없어요.</p>
@@ -252,6 +252,13 @@ export default function Home() {
             <p className="mt-1 text-[14px] text-ink-muted">숨긴 식당을 다시 보이게 하거나 쿨다운을 줄여 보세요.</p>
           )}
         </div>
+      )}
+
+      {/* Holds the spin button's place, so the link below stays put when the places arrive. */}
+      {!ready && !loadError && (
+        <button type="button" className={primaryButton} disabled>
+          식당 불러오는 중
+        </button>
       )}
 
       {ready &&

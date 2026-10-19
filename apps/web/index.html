@@ -13,9 +13,111 @@
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
       crossorigin
     />
+    <!--
+      Launch screen, painted before the app's JS arrives (seconds on a phone's first visit).
+      React replaces it on its first render. It copies the home screen's loading state (header,
+      the filter bar's height, the wheel skeleton) so the swap does not move anything. Plain CSS
+      with the index.css tokens and their values as fallbacks, so it is styled even before the
+      app stylesheet loads (in dev that stylesheet comes with the JS).
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: var(--bg, #0e1411);
+      }
+      .launch {
+        box-sizing: border-box;
+        max-width: 28rem;
+        margin: 0 auto;
+        padding: 0 1rem;
+        color: var(--ink, #edf2ee);
+        /* index.css's stack without Pretendard: its files would share the network with the JS
+           and delay the app. The app swaps Pretendard in once it renders, as it always has. */
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .launch-header {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        height: 260px;
+        margin: 0 -1rem;
+        padding: 0 1.25rem 1.5rem;
+        box-sizing: border-box;
+      }
+      .launch-header h1 {
+        margin: 0;
+        font-size: 38px;
+        font-weight: 800;
+        line-height: 1.12;
+        letter-spacing: -0.035em;
+      }
+      .launch-header p {
+        margin: 0.25rem 0 0;
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0.8;
+      }
+      /* The filter bar's height (126px) plus the 20px gap above and below it. */
+      .launch-wheel {
+        width: 280px;
+        margin: 166px auto 0;
+        border-radius: 9999px;
+        box-shadow: 0 24px 60px -24px var(--shadow, rgb(0 0 0 / 0.45));
+      }
+      .launch-wheel svg {
+        display: block;
+      }
+      .launch-wheel .a,
+      .launch-wheel .b {
+        stroke: var(--bg, #0e1411);
+        stroke-width: 2;
+      }
+      .launch-wheel .a {
+        fill: var(--surface-2, #1e2823);
+      }
+      .launch-wheel .b {
+        fill: var(--surface, #151d19);
+      }
+      .launch-wheel .hub {
+        fill: var(--bg, #0e1411);
+        stroke: rgb(237 242 238 / 0.2);
+        stroke-width: 1.5;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .launch-wheel {
+          animation: launch-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      }
+      @keyframes launch-pulse {
+        50% {
+          opacity: 0.5;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="launch" aria-busy="true">
+        <div class="launch-header">
+          <h1>수내에서<br />뭐먹을까?</h1>
+          <p>주변 식당을 불러오는 중</p>
+        </div>
+        <!-- The same eight slices as the home screen's WheelSkeleton. -->
+        <div class="launch-wheel" aria-hidden="true">
+          <svg viewBox="-6 -6 292 292" width="280" height="280">
+            <circle class="b" cx="140" cy="140" r="140" />
+            <path class="a" d="M140 140L140 0A140 140 0 0 1 239 41Z" />
+            <path class="a" d="M140 140L280 140A140 140 0 0 1 239 239Z" />
+            <path class="a" d="M140 140L140 280A140 140 0 0 1 41 239Z" />
+            <path class="a" d="M140 140L0 140A140 140 0 0 1 41 41Z" />
+            <circle class="hub" cx="140" cy="140" r="20" />
+          </svg>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

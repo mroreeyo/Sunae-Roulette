@@ -33,6 +33,34 @@ function shorten(label: string, max: number): string {
   return label.length > max ? `${label.slice(0, max)}…` : label;
 }
 
+const SKELETON_SLICES = 8;
+
+/**
+ * The wheel's shape while places load, so the real wheel takes its place without moving.
+ * `index.html` draws the same wheel as the launch screen; keep the two alike.
+ */
+export function WheelSkeleton() {
+  return (
+    <div
+      className="mx-auto rounded-full shadow-[0_24px_60px_-24px_var(--shadow)] motion-safe:animate-pulse"
+      style={{ width: SIZE }}
+      aria-hidden="true"
+    >
+      <svg viewBox={`${-POP_OUT} ${-POP_OUT} ${SIZE + POP_OUT * 2} ${SIZE + POP_OUT * 2}`} width={SIZE} height={SIZE} className="block">
+        {Array.from({ length: SKELETON_SLICES }, (_, i) => (
+          <path
+            key={i}
+            d={slicePath(i, SKELETON_SLICES)}
+            strokeWidth={2}
+            className={`stroke-bg ${i % 2 === 0 ? 'fill-surface-2' : 'fill-surface'}`}
+          />
+        ))}
+        <circle cx={RADIUS} cy={RADIUS} r={20} strokeWidth={1.5} className="fill-bg stroke-ink/20" />
+      </svg>
+    </div>
+  );
+}
+
 /**
  * Rotation that brings slice `index` under the pointer at 12 o'clock,
  * always spinning forward a few full turns from `current`.
