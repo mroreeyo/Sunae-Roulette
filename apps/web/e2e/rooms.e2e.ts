@@ -14,6 +14,41 @@ async function joinAs(page: Page, code: string, nickname: string) {
   await expect(page.getByRole('heading', { name: '오늘 점심 투표' })).toBeVisible();
 }
 
+/** A Phoenix frame: [join_ref, ref, topic, event, payload]. */
+type RealtimeFrame = [string | null, string | null, string, string, Record<string, unknown>];
+
+/**
+ * Realtime acknowledges a room channel's join before the Postgres subscription behind it exists,
+ * and never sends changes committed in between. That gap is a few milliseconds normally but
+ * seconds when the server restarts its replication after sitting idle. This widens it on demand:
+ * the page's "Subscribed to PostgreSQL" message is held until `release()`, and change events that
+ * arrive before then are dropped, as the server would never have sent them.
+ */
+async function delayRoomSubscription(page: Page) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let markJoined!: () => void;
+  const joined = new Promise<void>((resolve) => (markJoined = resolve));
+  await page.routeWebSocket(/\/realtime\/v1\/websocket/, (ws) => {
+    const server = ws.connectToServer();
+    let live = false;
+    void released.then(() => (live = true));
+    server.onMessage((message) => {
+      if (typeof message !== 'string') return ws.send(message);
+      const [, , topic, event, payload] = JSON.parse(message) as RealtimeFrame;
+      if (!topic.startsWith('realtime:room:') || live) return ws.send(message);
+      if (event === 'phx_reply' && payload.status === 'ok') markJoined();
+      if (event === 'postgres_changes') return;
+      if (event === 'system' && payload.extension === 'postgres_changes') {
+        void released.then(() => ws.send(message));
+        return;
+      }
+      ws.send(message);
+    });
+  });
+  return { joined, release };
+}
+
 test('two people vote in a room and each sees the other vote without reloading', async ({ page, browser }) => {
   await page.goto('/rooms/new');
   const candidates = page.getByRole('list', { name: '후보 목록' }).getByRole('listitem');
@@ -37,6 +72,26 @@ test('two people vote in a room and each sees the other vote without reloading',
 
   await page.getByRole('button', { name: `${second} 여기 투표` }).click();
   await expect(candidateRow(guest, second)).toContainText('2표');
+  await guest.context().close();
+});
+
+test('the host sees a guest who joined before Realtime started sending changes', async ({ page, browser }) => {
+  const realtime = await delayRoomSubscription(page);
+  await page.goto('/rooms/new');
+  await expect(page.getByRole('list', { name: '후보 목록' }).getByRole('listitem')).toHaveCount(3);
+  await page.getByRole('textbox', { name: '내 닉네임' }).fill('진행자');
+  await page.getByRole('button', { name: '투표 방 만들기' }).click();
+  await expect(page).toHaveURL(/\/r\/[A-HJKMNP-Z2-9]{8}$/);
+  const code = page.url().split('/r/')[1]!;
+  await realtime.joined;
+
+  // The guest's join lands after the host's channel joined but before its subscription is live.
+  const guest = await (await browser.newContext()).newPage();
+  await joinAs(guest, code, '손님');
+  realtime.release();
+
+  // Well before the 15-second fallback refetch.
+  await expect(page.getByRole('list', { name: '참여한 사람' })).toContainText('손님', { timeout: 5_000 });
   await guest.context().close();
 });
 

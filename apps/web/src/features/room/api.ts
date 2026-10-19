@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { requireSession, supabase } from '../../lib/supabase.ts';
 import { queryKeys, useSession } from '../data/queries.ts';
+import { subscribeWithRefresh } from './realtime.ts';
 
 /** Room data is live, so it is fetched fresh and never restored from the persisted cache. */
 export const roomKeys = {
@@ -351,22 +352,21 @@ export function useRoomRealtime(roomId: string | null) {
     if (!roomId) return;
     const refresh = () => client.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
     // DELETE events skip filters and RLS, and nothing in the app deletes votes or members.
-    const channel = supabase
-      .channel(`room:${roomId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes', filter: `room_id=eq.${roomId}` }, refresh)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'votes', filter: `room_id=eq.${roomId}` }, refresh)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomId}` }, refresh)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomId}` }, refresh)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, () => {
-        void refresh();
-        // A closed room may have added today's meal, and the home screen shows its result.
-        void client.invalidateQueries({ queryKey: queryKeys.meals });
-        void client.invalidateQueries({ queryKey: roomKeys.today });
-      })
-      // Changes made before the channel was ready, or while it was reconnecting, are not replayed.
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void refresh();
-      });
+    const channel = subscribeWithRefresh(
+      supabase
+        .channel(`room:${roomId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes', filter: `room_id=eq.${roomId}` }, refresh)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'votes', filter: `room_id=eq.${roomId}` }, refresh)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomId}` }, refresh)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomId}` }, refresh)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, () => {
+          void refresh();
+          // A closed room may have added today's meal, and the home screen shows its result.
+          void client.invalidateQueries({ queryKey: queryKeys.meals });
+          void client.invalidateQueries({ queryKey: roomKeys.today });
+        }),
+      () => void refresh(),
+    );
     return () => {
       void supabase.removeChannel(channel);
     };
@@ -393,12 +393,12 @@ export function useTodaysRoomsSync(rooms: TodaysRoom[] | undefined) {
       void client.invalidateQueries({ queryKey: roomKeys.today });
       void client.invalidateQueries({ queryKey: queryKeys.meals });
     };
-    const channel = supabase
-      .channel(`today-rooms:${ids}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=in.(${ids})` }, refresh)
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void client.invalidateQueries({ queryKey: roomKeys.today });
-      });
+    const channel = subscribeWithRefresh(
+      supabase
+        .channel(`today-rooms:${ids}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=in.(${ids})` }, refresh),
+      () => void client.invalidateQueries({ queryKey: roomKeys.today }),
+    );
     return () => {
       void supabase.removeChannel(channel);
     };
