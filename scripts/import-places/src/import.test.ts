@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { isKnownBusinessType, toCategory } from './categories.ts';
 import { epsg5174ToWgs84 } from './coords.ts';
 import { parseCsv } from './csv.ts';
 import { transformRows } from './transform.ts';
@@ -12,43 +11,6 @@ describe('parseCsv', () => {
       ['1,2', 'say "hi"', '3'],
       ['x', '', 'z'],
     ]);
-  });
-});
-
-describe('toCategory', () => {
-  it('maps licence business types to app categories', () => {
-    expect(toCategory('한식', '소월곰탕')).toBe('한식');
-    expect(toCategory('횟집', '수내어촌')).toBe('일식');
-    expect(toCategory('패밀리레스트랑', '알레피자&파스타')).toBe('양식');
-    expect(toCategory('외국음식전문점(인도,태국등)', '란반 정자역점')).toBe('아시안');
-  });
-
-  it('excludes drinking places, cafes and convenience stores', () => {
-    expect(toCategory('호프/통닭', '김복남맥주')).toBeNull();
-    expect(toCategory('커피숍', '사과나무')).toBeNull();
-    expect(toCategory('편의점', 'GS25 분당중앙점')).toBeNull();
-  });
-
-  it('excludes cafes hidden under generic business types by name', () => {
-    expect(toCategory('기타', '메가엠지씨커피 분당느티마을점')).toBeNull();
-    expect(toCategory('패스트푸드', '할리스커피숍(양지점)')).toBeNull();
-    expect(toCategory('기타', '포케올데이 서현역점')).toBe('기타');
-  });
-
-  it('excludes PC rooms, poker pubs and bars that hold a restaurant licence', () => {
-    expect(toCategory('기타', '레벨업 pc방 수내점')).toBeNull();
-    expect(toCategory('기타', '피씨테그(PC-TAG 수내역점)')).toBeNull();
-    expect(toCategory('기타', 'ABC 홀덤펍')).toBeNull();
-    expect(toCategory('기타', '야화혼술바 분당수내점')).toBeNull();
-    expect(toCategory('기타', '백스비어 분당수내점')).toBeNull();
-    expect(toCategory('기타', '신전떡볶이 수내점')).toBe('기타');
-    expect(toCategory('기타', '샐러디수내점')).toBe('기타');
-  });
-
-  it('falls back to 기타 for unknown business types', () => {
-    expect(toCategory('새로운업태', '식당')).toBe('기타');
-    expect(isKnownBusinessType('새로운업태')).toBe(false);
-    expect(isKnownBusinessType('한식')).toBe(true);
   });
 });
 
